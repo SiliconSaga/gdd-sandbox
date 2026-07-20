@@ -66,6 +66,8 @@ their site component, never here.
 | Scope of spec #1 | Layer A runtime only (3a) | Robustness + safety validate cleanly without the web persona; protects the agnostic boundary. |
 | Workspace model | Self-contained GDD workspace in the container | Gives `ws`, orientation, skills, realm, Thalamus — needed for session rotation + re-orientation; works for a remote user with no host workspace. |
 | Immutability split | Toolchain **baked** (immutable, tagged image); workspace **mutable** git checkout on a named volume | GDD stays improvable from inside and the site stays git-tracked; reproducibility lives at the toolchain layer. |
+| Workspace seeding | GDD core **baked at build** as a seed, freshened by `ws pull`; realm + target cloned at run | Fast first start + known-good baseline; base image stays agnostic. |
+| Dependency caches | Optional **per-flavor build layer** (`--build-arg FLAVOR=…`) warms gem / Node / Playwright caches | Runtime builds start warm once Layer C adds heavy deps; base image stays agnostic. |
 | Crash recovery | supervisor relaunch with `claude --continue` | One session ever → continue-most-recent needs no session-id tracking. |
 | Context hygiene | deliberate **session rotation** (archive → fresh → re-orient), primitive here; watch/advise later | Long-lived sessions bloat toward compaction; a fresh session re-orients from the persistent Thalamus. |
 | Safety posture | pre-allow only `reply`/`react`; deny-by-absence via workspace content; **no bypass-all** | Trusted-pilot posture; the container holds only in-scope repos, so out-of-scope simply does not exist. |
@@ -93,23 +95,42 @@ components/gdd-sandbox/
   docs/plans/                           # this design doc
 ```
 
-### The image (baked toolchain)
+### The image (baked toolchain + GDD-core seed)
 
 Debian-slim, from the proven kit: git/bash/curl/jq/unzip, mikefarah `yq`, `gh`,
 Node LTS, Bun (the Discord channel plugin's MCP server runtime), Ruby + Jekyll +
-Bundler, and the `claude` native binary. Plus the `ws` CLI prerequisites so a full
-GDD workspace runs. Auto-update disabled so the tagged image is reproducible. The
-image carries **no workspace clone and no credentials** — those arrive at run time.
+Bundler, and the `claude` native binary — plus the `ws` CLI prerequisites so a full
+GDD workspace runs. Auto-update disabled so the tagged image is reproducible.
+
+The image also **bakes a clone of the agnostic GDD core** (the `yggdrasil`
+workspace root) as a seed, so first-run startup is fast and the image is a
+known-good baseline; a runtime `ws pull` freshens it if the image has aged. It
+bakes **no realm, no target component, and no credentials** — those are
+per-instance and arrive at run time (realm + target cloned into the workspace,
+secrets injected). Baking only the agnostic core keeps the image reusable across
+pilots.
+
+**Optional dependency cache-warming (build-arg driven).** A build can pre-warm the
+caches a target flavor needs — for gh-pages that means the `bundle install` gem set
+and the visual-diff Node/**Playwright** stack (the browser binaries are the
+expensive download). Structured as a **per-flavor build layer**
+(`--build-arg FLAVOR=gh-pages`) so the base image stays agnostic and each flavor
+warms its own deps. The concrete gh-pages dep set lands when Layer C graduates the
+preview/diff pipeline into the template; the *mechanism* is specced now (and
+dovetails with the roadmap's "more template flavors" item).
 
 ### The workspace (mutable, on a volume)
 
-On first run the container clones a **self-contained GDD workspace** into a named
-volume: the yggdrasil root (brings `ws`, orientation, skills), the realm, and the
-one **target component** under `components/<target>/`. Working dir is the
-**workspace root** (where `ws orient` runs), *not* the target directory. Public
-repos clone read-only with no token; pushing needs the workspace push token
-(below). The volume persists across restarts, carrying the git checkouts, the
-Thalamus, and `~/.claude/channels/` (pairing) + session history for `--continue`.
+On first run the container **seeds** a self-contained GDD workspace onto a named
+volume from the baked-in `yggdrasil` clone, runs `ws pull` to freshen it, then
+clones the **realm** and the one **target component** (under
+`components/<target>/`) per the run args. Working dir is the **workspace root**
+(where `ws orient` runs), *not* the target directory. Public repos clone read-only
+with no token; pushing needs the workspace push token (below). The volume persists
+across restarts, carrying the git checkouts, the Thalamus, and
+`~/.claude/channels/` (pairing) + session history for `--continue`. On a restart
+where the volume already holds a workspace, the seed step is skipped and `ws pull`
+just freshens.
 
 **Scoping fence = workspace content.** Only in-scope repos are cloned, so
 out-of-scope repos do not exist inside the container to be touched — positive
@@ -118,13 +139,15 @@ scoping by absence, under the hook layer, not a rule the agent can talk around.
 ### Build + run interface
 
 - `build.sh` → `ws docker build -t gdd-sandbox:<tag> <context>` (Windows-style
-  build-context path; MSYS mangles `/d/…`).
+  build-context path; MSYS mangles `/d/…`). Accepts an optional `--flavor <name>`
+  → `--build-arg FLAVOR=<name>` to warm that flavor's dependency caches (above).
 - `run.sh --target <component> [--name <n>] [--channel …]`:
   1. Resolve the target's repo from `ecosystem`/realm config.
   2. `ws docker run -d --restart unless-stopped --env-file <runtime-secrets>`
      with the workspace named volume attached; **no host repo mounts**.
-  3. Provision: clone the workspace (first run), `claude plugin marketplace add`
-     + `plugin install discord@…`, seed `access.json` from the template +
+  3. Provision: seed the workspace from the baked GDD-core clone + `ws pull`, then
+     clone realm + target (first run only); `claude plugin marketplace add` +
+     `plugin install discord@…`, seed `access.json` from the template +
      snowflakes, patch onboarding.
   4. Start `supervise.sh`.
 
