@@ -67,7 +67,7 @@ their site component, never here.
 | Workspace model | Self-contained GDD workspace in the container | Gives `ws`, orientation, skills, realm, Thalamus — needed for session rotation + re-orientation; works for a remote user with no host workspace. |
 | Immutability split | Toolchain **baked** (immutable, tagged image); workspace **mutable** git checkout on a named volume | GDD stays improvable from inside and the site stays git-tracked; reproducibility lives at the toolchain layer. |
 | Workspace seeding | GDD core **baked at build** as a seed, freshened by `ws pull`; realm + target cloned at run | Fast first start + known-good baseline; base image stays agnostic. |
-| Dependency caches | Optional **per-flavor build layer** (`--build-arg FLAVOR=…`) warms gem / Node / Playwright caches | Runtime builds start warm once Layer C adds heavy deps; base image stays agnostic. |
+| Dependency caches | A few Dockerfile lines warm gem / Node / Playwright caches (keep the cache, discard source + build output); **one image tag** | Cheap insurance so runtime builds start warm; doesn't make the image framework-specific — no per-flavor fragmentation. |
 | Crash recovery | supervisor relaunch with `claude --continue` | One session ever → continue-most-recent needs no session-id tracking. |
 | Context hygiene | deliberate **session rotation** (archive → fresh → re-orient), primitive here; watch/advise later | Long-lived sessions bloat toward compaction; a fresh session re-orients from the persistent Thalamus. |
 | Safety posture | pre-allow only `reply`/`react`; deny-by-absence via workspace content; **no bypass-all** | Trusted-pilot posture; the container holds only in-scope repos, so out-of-scope simply does not exist. |
@@ -110,14 +110,17 @@ per-instance and arrive at run time (realm + target cloned into the workspace,
 secrets injected). Baking only the agnostic core keeps the image reusable across
 pilots.
 
-**Optional dependency cache-warming (build-arg driven).** A build can pre-warm the
-caches a target flavor needs — for gh-pages that means the `bundle install` gem set
-and the visual-diff Node/**Playwright** stack (the browser binaries are the
-expensive download). Structured as a **per-flavor build layer**
-(`--build-arg FLAVOR=gh-pages`) so the base image stays agnostic and each flavor
-warms its own deps. The concrete gh-pages dep set lands when Layer C graduates the
-preview/diff pipeline into the template; the *mechanism* is specced now (and
-dovetails with the roadmap's "more template flavors" item).
+**Dependency cache-warming (a few Dockerfile lines).** The image pre-warms the
+caches the likely target frameworks need — for gh-pages, the `bundle install` gem
+set and the visual-diff Node/**Playwright** stack (the browser binaries are the
+expensive download). Done the build-agent way: fetch the deps, **keep only the
+populated caches** (gem cache, npm + Playwright cache), and discard the throwaway
+source and build output, so the added image size is just the cache. This does
+**not** make the image gh-pages-specific — nothing constrains it to gh-pages; it is
+opportunistic prep for a likely framework, and **one image tag serves every use**
+(no per-flavor fragmentation). The concrete gh-pages dep set firms up when Layer C
+graduates the preview/diff pipeline; warming a project or two now is cheap
+insurance so runtime builds start warm.
 
 ### The workspace (mutable, on a volume)
 
@@ -139,8 +142,8 @@ scoping by absence, under the hook layer, not a rule the agent can talk around.
 ### Build + run interface
 
 - `build.sh` → `ws docker build -t gdd-sandbox:<tag> <context>` (Windows-style
-  build-context path; MSYS mangles `/d/…`). Accepts an optional `--flavor <name>`
-  → `--build-arg FLAVOR=<name>` to warm that flavor's dependency caches (above).
+  build-context path; MSYS mangles `/d/…`). Cache-warming is baked into the
+  Dockerfile (above), not a build-time flag — one image tag serves every use.
 - `run.sh --target <component> [--name <n>] [--channel …]`:
   1. Resolve the target's repo from `ecosystem`/realm config.
   2. `ws docker run -d --restart unless-stopped --env-file <runtime-secrets>`
