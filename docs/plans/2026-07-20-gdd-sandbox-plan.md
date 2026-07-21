@@ -22,6 +22,7 @@ Copy these verbatim into every relevant task — they are project-wide:
 - **Docs (README/AGENTS.md/SKILL.md) must state plainly: this is hosting compute, not subscription sharing.** Every served user runs toward their *own* Claude plan + logins.
 - **Shell:** all scripts `#!/usr/bin/env bash`, `set -euo pipefail` (or `set -u` where a nonzero exit is expected/handled); pass `shellcheck`.
 - **Line endings:** ship a `.gitattributes` with `* text=auto eol=lf` and `*.sh eol=lf` (the repo tripped CRLF warnings on Windows).
+- **Test environment (this host is lean — verified 2026-07-20):** `bats` is NOT on PATH but the workspace vendors a pure-bash copy at `<workspace>/tests/vendor/bats-core/bin/bats` (Bats 1.11.0, runs under Git Bash); a component sits at `<workspace>/components/<name>/`, so reach it at `../../../tests/vendor/...` from `tests/run.sh`. Do **not** copy bats into the component. `shellcheck` and `python3` are NOT on PATH; `jq` and `yq` ARE. Use **`jq` (not python3)** for JSON work, and run **`shellcheck` via `ws docker run --rm koalaman/shellcheck:stable`** (verified 0.11.0) with a PATH fallback if a host `shellcheck` ever exists. `node` is absent on the host (the visual-diff deps live only in the image).
 
 ## File Structure
 
@@ -41,7 +42,7 @@ components/gdd-sandbox/
     send.sh                             # in-container: write a keystroke into the session FIFO
   provision/
     provision.sh                        # in-container: seed workspace, ws pull, clone realm+target, install plugin, seed access, onboarding
-    patch-onboarding.py                 # in-container: mark Claude onboarding complete
+    patch-onboarding.sh                 # in-container: mark Claude onboarding complete (jq)
     access.json.template                # Discord allowlist template
     settings.sandbox.json               # pre-allow reply/react only (the safe posture)
   tests/
@@ -125,11 +126,24 @@ setup() {
 
 ```bash
 #!/usr/bin/env bash
+# Component self-test. Uses the workspace-vendored bats (this host has no bats on
+# PATH); shellcheck runs via the koalaman container unless a host shellcheck exists.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.."                                  # component root
+WS_ROOT="$(cd ../.. && pwd)"                             # <workspace>/components/<name> → workspace
+BATS="$(command -v bats || echo "$WS_ROOT/tests/vendor/bats-core/bin/bats")"
+
+shellcheck_run() {
+  if command -v shellcheck >/dev/null 2>&1; then
+    shellcheck "$@"
+  else
+    ws docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable "$@"
+  fi
+}
+
 case "${1:-test}" in
-  test) exec bats tests/ ;;
-  lint) exec shellcheck bin/*.sh tests/*.sh provision/*.sh ;;
+  test) exec bash "$BATS" tests/ ;;
+  lint) shellcheck_run bin/*.sh tests/*.sh provision/*.sh ;;
   *) echo "usage: tests/run.sh {test|lint}" >&2; exit 2 ;;
 esac
 ```
@@ -175,75 +189,70 @@ Message: `feat(gdd-sandbox): test harness + send.sh keystroke driver`
 Static assets + the onboarding patch, each with a validation test. No Docker.
 
 **Files:**
-- Create: `provision/patch-onboarding.py`, `provision/access.json.template`, `provision/settings.sandbox.json`, `tests/provision-assets.bats`
+- Create: `provision/patch-onboarding.sh`, `provision/access.json.template`, `provision/settings.sandbox.json`, `tests/provision-assets.bats`
 
 **Interfaces:**
-- Produces: `patch-onboarding.py [config-path] [project-path]` — sets onboarding-complete flags in the Claude config JSON (default `~/.claude.json`); if `project-path` given, marks that project trusted.
+- Produces: `patch-onboarding.sh [config-path] [project-path]` — sets onboarding-complete flags in the Claude config JSON via `jq` (default `~/.claude.json`); if `project-path` given, marks that project trusted.
 - Produces: `access.json.template` with `__ALLOWFROM__` placeholder (a JSON array of snowflakes) rendered by `provision.sh`.
 - Produces: `settings.sandbox.json` — `permissions.allow` listing ONLY the Discord reply/react tool ids.
 
-- [ ] **Step 1: Write the failing test** `tests/provision-assets.bats`
+- [ ] **Step 1: Write the failing test** `tests/provision-assets.bats` (uses `jq`, which is present; no python3)
 
 ```bash
 @test "patch-onboarding sets completion flags on an empty config" {
   cfg="$BATS_TEST_TMPDIR/claude.json"
-  python3 provision/patch-onboarding.py "$cfg"
-  run python3 -c "import json;d=json.load(open('$cfg'));print(d['hasCompletedOnboarding'])"
-  [ "$output" = "True" ]
+  bash provision/patch-onboarding.sh "$cfg"
+  run jq -r '.hasCompletedOnboarding' "$cfg"
+  [ "$output" = "true" ]
 }
 
 @test "patch-onboarding marks a project trusted when given a path" {
   cfg="$BATS_TEST_TMPDIR/claude.json"
-  python3 provision/patch-onboarding.py "$cfg" "/work/ws"
-  run python3 -c "import json;d=json.load(open('$cfg'));print(d['projects']['/work/ws']['hasTrustDialogAccepted'])"
-  [ "$output" = "True" ]
+  bash provision/patch-onboarding.sh "$cfg" "/work/ws"
+  run jq -r '.projects["/work/ws"].hasTrustDialogAccepted' "$cfg"
+  [ "$output" = "true" ]
 }
 
 @test "access template renders to valid JSON with the snowflake" {
-  out="$(sed 's/__ALLOWFROM__/["123"]/' provision/access.json.template)"
-  echo "$out" | python3 -c "import json,sys;d=json.load(sys.stdin);assert d['allowFrom']==['123'];print('ok')"
+  run bash -c "sed 's/__ALLOWFROM__/[\"123\"]/' provision/access.json.template | jq -e '.allowFrom == [\"123\"]'"
+  [ "$status" -eq 0 ]
 }
 
 @test "sandbox settings pre-allow reply and react and nothing broad" {
-  run python3 -c "import json;a=json.load(open('provision/settings.sandbox.json'))['permissions']['allow']; import sys; sys.exit(0 if any('reply' in x for x in a) and all('Bash' not in x for x in a) else 1)"
+  run jq -e '.permissions.allow as $a
+             | ($a | any(test("reply"))) and ($a | all(test("Bash") | not))' \
+        provision/settings.sandbox.json
   [ "$status" -eq 0 ]
 }
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `bats tests/provision-assets.bats`
+Run: `bash "$(cd ../.. && pwd)/tests/vendor/bats-core/bin/bats" tests/provision-assets.bats` (or `bash tests/run.sh test`)
 Expected: FAIL — assets do not exist.
 
-- [ ] **Step 3: Write `provision/patch-onboarding.py`**
+- [ ] **Step 3: Write `provision/patch-onboarding.sh`**
 
-```python
-#!/usr/bin/env python3
-"""Mark Claude Code first-run onboarding complete so an interactive --channels
-session does not stall on theme/login/trust prompts. Production-safe: does NOT
-pre-accept bypass mode (the sandbox uses default mode + an allow-list posture)."""
-import json, os, sys
-
-cfg_path = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/.claude.json")
-project = sys.argv[2] if len(sys.argv) > 2 else None
-
-try:
-    with open(cfg_path) as f:
-        cfg = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    cfg = {}
-
-cfg["hasCompletedOnboarding"] = True
-cfg.setdefault("theme", "dark")
-if project:
-    cfg.setdefault("projects", {})
-    cfg["projects"].setdefault(project, {})
-    cfg["projects"][project]["hasTrustDialogAccepted"] = True
-    cfg["projects"][project]["hasCompletedProjectOnboarding"] = True
-
-with open(cfg_path, "w") as f:
-    json.dump(cfg, f, indent=2)
-print(f"patched {cfg_path}")
+```bash
+#!/usr/bin/env bash
+# Mark Claude Code first-run onboarding complete so an interactive --channels
+# session does not stall on theme/login/trust prompts. Production-safe: does NOT
+# pre-accept bypass mode (the sandbox uses default mode + an allow-list posture).
+set -euo pipefail
+CFG="${1:-$HOME/.claude.json}"
+PROJECT="${2:-}"
+[ -f "$CFG" ] || echo '{}' > "$CFG"
+tmp="$(mktemp)"
+jq --arg proj "$PROJECT" '
+    .hasCompletedOnboarding = true
+  | .theme = (.theme // "dark")
+  | if $proj != "" then
+      .projects[$proj].hasTrustDialogAccepted = true
+      | .projects[$proj].hasCompletedProjectOnboarding = true
+    else . end
+' "$CFG" > "$tmp"
+mv "$tmp" "$CFG"
+echo "patched $CFG"
 ```
 
 - [ ] **Step 4: Write `provision/access.json.template`**
@@ -273,7 +282,7 @@ print(f"patched {cfg_path}")
 
 - [ ] **Step 6: Run to verify pass**
 
-Run: `bats tests/provision-assets.bats` → Expected: PASS (4 tests)
+Run: `bash tests/run.sh test` → Expected: PASS (all suites, incl. 4 provision-assets tests)
 Run: `bash tests/run.sh lint` → Expected: clean
 
 - [ ] **Step 7: Commit** — `feat(gdd-sandbox): provisioning assets (onboarding, access, safe posture)`
@@ -429,6 +438,7 @@ load helpers/stub
 
 setup() {
   stub_setup
+  export HOME="$BATS_TEST_TMPDIR/home"; mkdir -p "$HOME"   # never touch the real ~/.claude
   export GDD_WORKSPACE="$BATS_TEST_TMPDIR/ws"
   export GDD_TARGET="ken-site" GDD_TARGET_REPO="https://example/ken-site.git"
   export GDD_ALLOWFROM='["123"]'
@@ -436,7 +446,7 @@ setup() {
   make_stub git 'exit 0'
   make_stub ws 'exit 0'
   make_stub claude 'exit 0'
-  make_stub python3 'exit 0'
+  # jq is real (present on host + image); patch-onboarding.sh uses it against $HOME.
 }
 
 @test "provision seeds the workspace from the seed when absent" {
@@ -490,7 +500,7 @@ claude plugin install discord@claude-plugins-official
 mkdir -p "$HOME/.claude/channels/discord"
 sed "s/__ALLOWFROM__/${GDD_ALLOWFROM:-[]}/" "$HERE/access.json.template" \
   > "$HOME/.claude/channels/discord/access.json"
-python3 "$HERE/patch-onboarding.py" "$HOME/.claude.json" "$WS"
+bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"
 echo "provision complete: $WS (target=$GDD_TARGET)"
 ```
 
