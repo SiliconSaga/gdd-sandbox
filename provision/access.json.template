@@ -1,0 +1,5 @@
+{
+  "dmPolicy": "allowlist",
+  "allowFrom": __ALLOWFROM__,
+  "ackReaction": "👀"
+}
