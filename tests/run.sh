@@ -4,7 +4,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."                                  # component root
 WS_ROOT="$(cd ../.. && pwd)"                             # <workspace>/components/<name> → workspace
-BATS="$(command -v bats || echo "$WS_ROOT/tests/vendor/bats-core/bin/bats")"
+# Prefer a real bats; else the workspace-vendored copy. Inside the sandbox image
+# the baked seed's copy is used instead: a Windows checkout leaves the workspace
+# copy CRLF, which /bin/bash on Linux refuses ($'\r': command not found).
+BATS="$(command -v bats || true)"
+if [ -z "$BATS" ] && [ -x /opt/gdd-seed/tests/vendor/bats-core/bin/bats ]; then
+  BATS=/opt/gdd-seed/tests/vendor/bats-core/bin/bats
+fi
+BATS="${BATS:-$WS_ROOT/tests/vendor/bats-core/bin/bats}"
 
 shellcheck_run() {
   if command -v shellcheck >/dev/null 2>&1; then
