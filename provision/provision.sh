@@ -7,9 +7,12 @@ SEED="${GDD_SEED:-/opt/gdd-seed}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # 1. Seed the mutable workspace from the baked GDD core (first run only).
+# Copy the seed's CONTENTS ("$SEED/." -> "$WS/"), not the seed directory itself:
+# $WS is a mounted volume, so it already exists and `cp -a "$SEED" "$WS"` would
+# nest the clone at $WS/gdd-seed instead of populating $WS.
 if [ ! -e "$WS/.git" ]; then
-  mkdir -p "$(dirname "$WS")"
-  cp -a "$SEED" "$WS"
+  mkdir -p "$WS"
+  cp -a "$SEED/." "$WS/"
 fi
 
 # 2. Freshen, then clone realm + target into the workspace (idempotent).

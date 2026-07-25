@@ -19,6 +19,16 @@ setup() {
   grep -q "git clone .*$GDD_TARGET_REPO" "$STUB_LOG"
 }
 
+@test "provision populates an existing empty workspace dir, not a nested copy" {
+  # A Docker volume mounts as an existing empty dir, so the seed must copy its
+  # CONTENTS in; `cp -a $SEED $WS` would nest the clone at $WS/gdd-seed.
+  mkdir -p "$GDD_WORKSPACE"
+  touch "$GDD_SEED/marker-file"
+  bash provision/provision.sh
+  [ -e "$GDD_WORKSPACE/marker-file" ]
+  [ ! -e "$GDD_WORKSPACE/$(basename "$GDD_SEED")" ]
+}
+
 @test "provision skips the seed when the workspace already exists" {
   mkdir -p "$GDD_WORKSPACE/.git"
   bash provision/provision.sh
