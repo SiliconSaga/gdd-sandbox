@@ -15,6 +15,52 @@ repo and their site component).
 > entitlement (whose subscription and tokens it uses) — managed hosting, not a
 > shared account, with the end goal of a self-sufficient user.
 
+## Status
+
+Validated live on 2026-07-26 against a real Discord bot and a real site component
+(`ken-site`), on a Claude subscription token in a plain Docker container.
+
+**Working end to end**
+
+- Provisioning: workspace seeded from the baked GDD core, target component cloned,
+  channel plugin installed, allowlist and onboarding configured.
+- The chat loop: a direct message reaches the agent and a reply comes back, with no
+  permission card and no API key.
+- Crash recovery: the supervisor relaunches a dead session with `--continue`, and
+  context survives — a session recalled a fact set the previous day, across a full
+  container stop/start.
+- Deliberate rotation: `rotate.sh` archives the session and brings up a fresh one.
+
+**Not yet done** (roughly in the order they should be tackled)
+
+1. **A container restart does not restore the session.** `supervise.sh` is started
+   with `docker exec -d`, so it dies with the container; the restart policy then
+   brings the container back running only `sleep infinity`. This breaks the central
+   promise — an agent that stops answering with no outward sign is the exact failure
+   this design exists to cure. Fix: bake the scripts into the image and make the
+   entrypoint run provisioning then supervision, so Docker's restart policy actually
+   restores the agent.
+2. **The healthcheck is wrong.** It requires the session log to be recent, but a
+   session idling correctly between messages writes nothing, so a healthy sandbox
+   reports `unhealthy`. Use process liveness; detecting a genuinely wedged session
+   needs a real probe.
+3. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
+   pre-allowed, so anything else still relays a permission card to the chat user.
+   Asking a non-technical person to approve "run jekyll build?" teaches them to tap
+   Allow reflexively — worse than no gate. Routine work tools need pre-allowing and
+   destructive ones hard-denying before any real pilot.
+4. **Shared channels are unsupported.** `access.json.template` only expresses direct
+   messages. A shared channel (operator + user + agent, the intended pilot setup)
+   needs a `groups` entry keyed on the channel id plus a mention policy, and `run.sh`
+   needs a flag to pass one.
+
+**A failure mode worth knowing about.** A long-lived session can accumulate
+*failure* context and reason itself into not attempting an action at all — not
+broken, just confidently unhelpful, which from the outside looks identical to a
+working agent with nothing to say. Rotation clears it. This is why "is the process
+alive?" is a weak health signal, and why an agent declining to act should surface to
+the operator rather than only to the person waiting on a reply.
+
 ## Prerequisites (one-time, human)
 
 1. **Docker** running. Use `ws docker …`, which handles Windows path conversion.
