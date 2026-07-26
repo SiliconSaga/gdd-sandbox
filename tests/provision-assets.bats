@@ -29,3 +29,14 @@
         provision/settings.sandbox.json
   [ "$status" -eq 0 ]
 }
+
+@test "sandbox settings use the plugin's real MCP tool ids" {
+  # The id is mcp__<server>__<tool>; the server is `plugin:discord:discord`
+  # (per `claude mcp list`), NOT `discord`. A wrong id silently fails open —
+  # every reply prompts instead of being pre-allowed. Verified live 2026-07-26.
+  run jq -e '.permissions.allow
+             | index("mcp__plugin:discord:discord__reply")
+               and index("mcp__plugin:discord:discord__react")' \
+        provision/settings.sandbox.json
+  [ "$status" -eq 0 ]
+}
