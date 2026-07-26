@@ -18,3 +18,27 @@ ws_host_path() {
         printf '%s\n' "$1"
     fi
 }
+
+# The runtime secrets the sandbox is allowed to receive. Deliberately a short
+# allowlist: everything else in the operator's .env (GH_TOKEN, HARBOR_ADMIN_PW,
+# ...) stays OUT of the container. The user's own push token belongs in the
+# workspace .env on the volume, not here.
+WS_RUNTIME_SECRETS='CLAUDE_CODE_OAUTH_TOKEN|DISCORD_BOT_TOKEN'
+
+# Write a minimal env file for `docker --env-file` from an operator .env.
+#
+# Two transforms: keep only the allowlisted runtime secrets, and strip any
+# `export ` prefix. `ws` accepts `export KEY=value`, but docker's --env-file
+# parser does not — it reads "export GH_TOKEN" as the variable name and rejects
+# it for containing whitespace.
+#
+# Returns non-zero if nothing matched, so a misconfigured secrets file fails
+# loudly rather than starting a container with no credentials.
+ws_write_runtime_env() {
+    local src="$1" dest="$2"
+    : > "$dest"
+    chmod 600 "$dest" 2>/dev/null || true
+    grep -E "^[[:space:]]*(export[[:space:]]+)?($WS_RUNTIME_SECRETS)=" "$src" \
+        | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//' >> "$dest" || true
+    [ -s "$dest" ]
+}

@@ -31,9 +31,19 @@ fi
 # Resolve the target repo from ecosystem if not given.
 [ -n "$TARGET_REPO" ] || TARGET_REPO="$(yq ".components.$TARGET.repo" "$WS_ROOT/ecosystem.local.yaml")"
 
+# Hand docker a MINIMAL env file: only the allowlisted runtime secrets, with any
+# `export ` prefix stripped (docker's --env-file parser rejects it). Keeps the
+# operator's other credentials out of the container entirely.
+RUNTIME_ENV="$(mktemp)"
+trap 'rm -f "$RUNTIME_ENV"' EXIT
+if ! ws_write_runtime_env "$SECRETS" "$RUNTIME_ENV"; then
+  echo "error: no runtime secrets ($WS_RUNTIME_SECRETS) found in $SECRETS" >&2
+  exit 2
+fi
+
 VOL="gdd-sandbox-$TARGET-ws"
 ws docker run -d --name "$NAME" --restart unless-stopped \
-  --env-file "$(ws_host_path "$SECRETS")" \
+  --env-file "$(ws_host_path "$RUNTIME_ENV")" \
   -e "GDD_TARGET=$TARGET" -e "GDD_TARGET_REPO=$TARGET_REPO" \
   -e "GDD_REALM_REPO=$REALM_REPO" -e "GDD_ALLOWFROM=$ALLOWFROM" \
   -e "GDD_WORKSPACE=/work/ws" -e "CLAUDE_SETTINGS=/work/gdd-sandbox/provision/settings.sandbox.json" \
