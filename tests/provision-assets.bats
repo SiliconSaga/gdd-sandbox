@@ -23,20 +23,6 @@
   [ "$status" -eq 0 ]
 }
 
-@test "sandbox settings pre-allow reply and react and nothing broad" {
-  run jq -e '.permissions.allow as $a
-             | ($a | any(test("reply"))) and ($a | all(test("Bash") | not))' \
-        provision/settings.sandbox.json
-  [ "$status" -eq 0 ]
-}
-
-@test "sandbox settings use the plugin's real MCP tool ids" {
-  # The id is mcp__<server>__<tool>; the server is `plugin:discord:discord`
-  # (per `claude mcp list`), NOT `discord`. A wrong id silently fails open —
-  # every reply prompts instead of being pre-allowed. Verified live 2026-07-26.
-  run jq -e '.permissions.allow
-             | index("mcp__plugin:discord:discord__reply")
-               and index("mcp__plugin:discord:discord__react")' \
-        provision/settings.sandbox.json
-  [ "$status" -eq 0 ]
-}
+# Pre-allow assertions now live in tests/supervise.bats: the chat tools are
+# granted via `--allowedTools` on the launch command. A `--settings` file with
+# permissions.allow was verified NOT to apply them (live, 2026-07-26).

@@ -108,9 +108,16 @@ account. Wiring liveness into an observability stack is a later addition.
 
 ## Safety posture
 
-- Pre-allow **only** the chat `reply`/`react` tools (`provision/settings.sandbox.json`)
-  so they never prompt. **Never** `--dangerously-skip-permissions` / bypass-all in
+- Pre-allow **only** the chat `reply`/`react` tools, via `--allowedTools` on the
+  launch command in `bin/supervise.sh` (override with `GDD_ALLOWED_TOOLS`), so they
+  never prompt. **Never** `--dangerously-skip-permissions` / bypass-all in
   production — the proto used bypass only to isolate the auth round-trip.
+  A `--settings` file with `permissions.allow` was verified live NOT to grant MCP
+  tools; `--allowedTools` is the mechanism that works. Ids are
+  `mcp__plugin:discord:discord__reply` / `__react`.
+- **Known gap:** anything *not* pre-allowed still relays a permission card to the
+  chat user. For a non-technical user that is the rubber-stamp trap — routine work
+  tools need pre-allowing and destructive ones hard-denying before a real pilot.
 - The workspace holds only in-scope repos, so out-of-scope work is impossible by
   absence rather than by a rule the agent could talk around.
 - Consequential decisions (merge, publish) belong in chat as **outcome** questions

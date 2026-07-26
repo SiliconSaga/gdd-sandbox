@@ -46,7 +46,7 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   --env-file "$(ws_host_path "$RUNTIME_ENV")" \
   -e "GDD_TARGET=$TARGET" -e "GDD_TARGET_REPO=$TARGET_REPO" \
   -e "GDD_REALM_REPO=$REALM_REPO" -e "GDD_ALLOWFROM=$ALLOWFROM" \
-  -e "GDD_WORKSPACE=/work/ws" -e "CLAUDE_SETTINGS=/work/gdd-sandbox/provision/settings.sandbox.json" \
+  -e "GDD_WORKSPACE=/work/ws" \
   -v "$VOL:/work/ws" \
   "$IMAGE"
 

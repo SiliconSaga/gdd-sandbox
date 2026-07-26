@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "mcp__plugin:discord:discord__reply",
-      "mcp__plugin:discord:discord__react"
-    ]
-  }
-}

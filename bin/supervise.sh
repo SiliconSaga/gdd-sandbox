@@ -5,8 +5,13 @@
 #    the fresh session re-orients via AGENTS.md ("run ws orient on startup").
 set -u
 WS="${GDD_WORKSPACE:-/work/ws}"
-SETTINGS="${CLAUDE_SETTINGS:-/work/ws/.claude/settings.sandbox.json}"
 ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
+# Pre-allowed chat tools, passed explicitly on the command line. These must never
+# prompt: relaying a raw "allow discord-reply?" card to a non-technical user is the
+# rubber-stamp trap — they learn to tap Allow reflexively, which is worse than no
+# gate. Ids are `mcp__<server>__<tool>`; the server is `plugin:discord:discord`
+# per `claude mcp list`. Everything else stays gated.
+ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react}"
 LAUNCHED="$WS/.gdd-sandbox-launched"
 TTY_LOG=/tmp/channels-tty.log
 FIFO=/tmp/claude-stdin
@@ -18,7 +23,7 @@ launch() {
   local w=$!
   # shellcheck disable=SC2086
   script -q -f -c \
-    "claude --channels plugin:discord@claude-plugins-official --settings '$SETTINGS' $cont" \
+    "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' $cont" \
     "$TTY_LOG" < "$FIFO"
   kill "$w" 2>/dev/null || true
 }

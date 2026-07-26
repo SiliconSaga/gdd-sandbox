@@ -3,12 +3,23 @@ load helpers/stub
 setup() {
   stub_setup
   export GDD_WORKSPACE="$BATS_TEST_TMPDIR/ws"; mkdir -p "$GDD_WORKSPACE"
-  export CLAUDE_SETTINGS="$BATS_TEST_TMPDIR/settings.json"; echo '{}' > "$CLAUDE_SETTINGS"
   export ROTATE_FLAG="$BATS_TEST_TMPDIR/rotate"
   export SUPERVISE_ONCE=1
   # 'script' is the PTY wrapper; stub it to just log the claude command it was given.
   make_stub script 'echo "$*" >> "$STUB_LOG"'
   make_stub ws 'exit 0'
+}
+
+@test "launch pre-allows only the chat reply/react tools" {
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--allowedTools"* ]]
+  [[ "$output" == *"mcp__plugin:discord:discord__reply"* ]]
+  [[ "$output" == *"mcp__plugin:discord:discord__react"* ]]
+  # Nothing broad, and never a blanket bypass.
+  [[ "$output" != *"Bash"* ]]
+  [[ "$output" != *"bypassPermissions"* ]]
+  [[ "$output" != *"dangerously-skip-permissions"* ]]
 }
 
 @test "first launch does not pass --continue" {
