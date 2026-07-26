@@ -24,9 +24,15 @@ if [ -n "${GDD_TARGET_REPO:-}" ] && [ ! -e "components/$GDD_TARGET/.git" ]; then
   git clone "$GDD_TARGET_REPO" "components/$GDD_TARGET"
 fi
 
-# 3. Install the Discord channel plugin (brings its Bun deps).
-claude plugin marketplace add anthropics/claude-plugins-official
-claude plugin install discord@claude-plugins-official
+# 3. Install the Discord channel plugin (brings its Bun deps). Provisioning runs
+# on every container start, so skip when it is already present — re-adding the
+# marketplace errors, and a restart should be fast.
+if [ ! -d "$HOME/.claude/plugins/cache/claude-plugins-official/discord" ]; then
+  claude plugin marketplace add anthropics/claude-plugins-official
+  claude plugin install discord@claude-plugins-official
+else
+  echo "provision: discord plugin already installed"
+fi
 
 # 4. Seed the allowlist + patch onboarding.
 #

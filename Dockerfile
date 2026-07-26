@@ -122,14 +122,29 @@ RUN set -eux; \
     cd /; rm -rf "$tmp"
 
 # ---------------------------------------------------------------------------
-# 10. Liveness: the channels process is alive AND its tty log is fresh.
-#     Process-level only — nothing leaks into a user's chat.
+# 10. The operator scripts, baked in. They are agnostic — no realm, target, or
+#     credentials — so they belong to the image, and baking them lets the
+#     entrypoint own provisioning + supervision (see below). Copied late so the
+#     expensive layers above stay cached when a script changes.
 # ---------------------------------------------------------------------------
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD pgrep -f "claude .*--channels" >/dev/null \
-      && [ -f /tmp/channels-tty.log ] \
-      && [ "$(( $(date +%s) - $(stat -c %Y /tmp/channels-tty.log) ))" -lt 120 ] \
-      || exit 1
+COPY bin/ /opt/gdd-sandbox/bin/
+COPY provision/ /opt/gdd-sandbox/provision/
+COPY entrypoint.sh /opt/gdd-sandbox/entrypoint.sh
+RUN chmod +x /opt/gdd-sandbox/entrypoint.sh /opt/gdd-sandbox/bin/*.sh \
+             /opt/gdd-sandbox/provision/*.sh
+
+# ---------------------------------------------------------------------------
+# 11. Liveness: is the channels process alive? Process-level only — nothing
+#     leaks into a user's chat.
+#     NOT log freshness: a session idling correctly between messages writes
+#     nothing, so a healthy sandbox would report unhealthy (observed live), and
+#     mtime cannot tell idle from wedged anyway. Detecting a genuinely wedged
+#     session needs a real probe — that belongs with the observability work.
+# ---------------------------------------------------------------------------
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
+  CMD /opt/gdd-sandbox/bin/healthcheck.sh
 
 WORKDIR /work
-CMD ["sleep", "infinity"]
+# The supervisor is the container's main process, so Docker's restart policy
+# actually restores the agent. See entrypoint.sh for why `docker exec -d` is wrong.
+ENTRYPOINT ["/opt/gdd-sandbox/entrypoint.sh"]

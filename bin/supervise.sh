@@ -18,14 +18,18 @@ FIFO=/tmp/claude-stdin
 
 launch() {
   local cont="$1"   # "--continue" or ""
+  local rc=0
   : > "$TTY_LOG"; rm -f "$FIFO"; mkfifo "$FIFO"
   sleep infinity > "$FIFO" &            # hold the FIFO open (drive prompts + no EOF)
   local w=$!
+  # -e so script returns the child's exit status; without it a failed session
+  # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
-  script -q -f -c \
+  script -q -e -f -c \
     "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' $cont" \
-    "$TTY_LOG" < "$FIFO"
+    "$TTY_LOG" < "$FIFO" || rc=$?
   kill "$w" 2>/dev/null || true
+  return "$rc"
 }
 
 run_once() {
@@ -40,7 +44,21 @@ run_once() {
     cont="--continue"
   fi
   touch "$LAUNCHED"
-  launch "$cont"
+  if launch "$cont"; then
+    return 0
+  fi
+  # A --continue launch can fail outright — most commonly "No conversation found
+  # to continue", when the session history was lost but the sentinel survived
+  # (history lives in ~/.claude, the sentinel on the workspace volume, so
+  # replacing the container desyncs them). Retrying --continue forever is a
+  # crash loop that Docker happily reports as healthy. Fall back to a fresh
+  # session instead: context is recoverable from the Thalamus, silence is not.
+  if [ -n "$cont" ]; then
+    echo "supervise: --continue failed; starting a fresh session" >&2
+    rm -f "$LAUNCHED"
+    launch "" || true
+    touch "$LAUNCHED"
+  fi
 }
 
 if [ "${SUPERVISE_ONCE:-0}" = "1" ]; then run_once; exit 0; fi

@@ -41,6 +41,11 @@ if ! ws_write_runtime_env "$SECRETS" "$RUNTIME_ENV"; then
   exit 2
 fi
 
+# Two volumes: the workspace, and ~/.claude. The latter carries the plugin
+# install, the channel pairing, and the session history `--continue` reads. Left
+# in the container layer it dies with the container while the launch sentinel on
+# the workspace volume survives — every relaunch then asks to continue a session
+# that no longer exists.
 VOL="gdd-sandbox-$TARGET-ws"
 ws docker run -d --name "$NAME" --restart unless-stopped \
   --env-file "$(ws_host_path "$RUNTIME_ENV")" \
@@ -48,10 +53,11 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   -e "GDD_REALM_REPO=$REALM_REPO" -e "GDD_ALLOWFROM=$ALLOWFROM" \
   -e "GDD_WORKSPACE=/work/ws" \
   -v "$VOL:/work/ws" \
+  -v "$VOL-claude:/root/.claude" \
   "$IMAGE"
 
-# Copy the operator scripts in and provision, then supervise detached.
-ws docker cp "$(ws_host_path "$ROOT")/." "$NAME:/work/gdd-sandbox"
-ws docker exec "$NAME" bash /work/gdd-sandbox/provision/provision.sh
-ws docker exec -d "$NAME" bash /work/gdd-sandbox/bin/supervise.sh
+# No `docker cp` / `exec` here on purpose: the image bakes the scripts and its
+# entrypoint runs provisioning then supervision. A supervisor started with
+# `docker exec -d` would die with the container, leaving the restart policy to
+# bring back a container with no agent listening.
 echo "sandbox '$NAME' up (target=$TARGET). Tail: ws docker exec $NAME tail -f /tmp/channels-tty.log"

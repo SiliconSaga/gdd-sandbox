@@ -22,6 +22,21 @@ setup() {
   [[ "$output" != *"dangerously-skip-permissions"* ]]
 }
 
+@test "a failed --continue falls back to a fresh session" {
+  # Session history lives in ~/.claude, the sentinel on the workspace volume, so
+  # they can desync ("No conversation found to continue"). Retrying --continue
+  # forever is a crash loop Docker reports as healthy.
+  touch "$GDD_WORKSPACE/.gdd-sandbox-launched"
+  # Fail only the --continue attempt; succeed when launched fresh.
+  make_stub script 'echo "$*" >> "$STUB_LOG"; case "$*" in *--continue*) exit 1 ;; esac'
+  run bash bin/supervise.sh
+  [[ "$output" == *"--continue failed"* ]]
+  run grep -c -- "--continue" "$STUB_LOG"
+  [ "$output" = "1" ]          # tried once
+  run grep -c "claude --channels" "$STUB_LOG"
+  [ "$output" = "2" ]          # then relaunched fresh
+}
+
 @test "first launch does not pass --continue" {
   bash bin/supervise.sh
   run grep -c -- "--continue" "$STUB_LOG"

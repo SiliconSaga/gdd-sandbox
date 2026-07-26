@@ -54,6 +54,18 @@ setup() {
   [[ "$output" == *"no runtime secrets"* ]]
 }
 
+@test "run.sh does not start the supervisor via docker exec" {
+  # Regression guard: a supervisor started with `docker exec -d` dies with the
+  # container, so the restart policy brings back a container with no agent
+  # listening — silent ghosting. Supervision must be the image's entrypoint.
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" != *"exec -d"* ]]
+  [[ "$output" != *"supervise.sh"* ]]
+  [[ "$output" != *"docker cp"* ]]
+}
+
 @test "run.sh refuses secrets containing ANTHROPIC_API_KEY" {
   echo 'ANTHROPIC_API_KEY=sk-xxx' > "$BATS_TEST_TMPDIR/secrets.env"
   run bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"

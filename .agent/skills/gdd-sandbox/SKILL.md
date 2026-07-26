@@ -42,8 +42,10 @@ workspace-root `.env`), `--target-repo` / `--realm-repo` (default resolved from
 `ecosystem.local.yaml`).
 
 `run.sh` starts the container with a named workspace volume and
-`--restart unless-stopped`, copies the operator scripts in, provisions, and
-launches the supervisor detached. Watch it come up:
+`--restart unless-stopped`. The scripts are baked into the image, and its
+**entrypoint** runs provisioning then supervision — so Docker's restart policy
+actually restores the agent. (A supervisor started with `docker exec -d` dies with
+the container, leaving it "up" with nobody listening.) Watch it come up:
 
 ```bash
 ws docker exec <name> tail -f /tmp/channels-tty.log
@@ -74,7 +76,7 @@ leading space breaks the variable name.
 - **Deliberate rotation** (context has grown too large) — run:
 
   ```bash
-  ws docker exec <name> bash /work/gdd-sandbox/bin/rotate.sh
+  ws docker exec <name> bash /opt/gdd-sandbox/bin/rotate.sh
   ```
 
   This archives the current tty log and launches a **fresh** session (no
@@ -86,7 +88,7 @@ A one-time interactive prompt can be answered by writing a keystroke into the
 session FIFO:
 
 ```bash
-ws docker exec <name> bash /work/gdd-sandbox/bin/send.sh enter
+ws docker exec <name> bash /opt/gdd-sandbox/bin/send.sh enter
 ```
 
 ## Liveness

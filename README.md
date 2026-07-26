@@ -31,20 +31,13 @@ Validated live on 2026-07-26 against a real Discord bot and a real site componen
   container stop/start.
 - Deliberate rotation: `rotate.sh` archives the session and brings up a fresh one.
 
+- Restart survival: supervision is the container's entrypoint, so Docker's restart
+  policy restores the agent rather than bringing back a container with nobody
+  listening.
+
 **Not yet done** (roughly in the order they should be tackled)
 
-1. **A container restart does not restore the session.** `supervise.sh` is started
-   with `docker exec -d`, so it dies with the container; the restart policy then
-   brings the container back running only `sleep infinity`. This breaks the central
-   promise — an agent that stops answering with no outward sign is the exact failure
-   this design exists to cure. Fix: bake the scripts into the image and make the
-   entrypoint run provisioning then supervision, so Docker's restart policy actually
-   restores the agent.
-2. **The healthcheck is wrong.** It requires the session log to be recent, but a
-   session idling correctly between messages writes nothing, so a healthy sandbox
-   reports `unhealthy`. Use process liveness; detecting a genuinely wedged session
-   needs a real probe.
-3. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
+1. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
    pre-allowed, so anything else still relays a permission card to the chat user.
    Asking a non-technical person to approve "run jekyll build?" teaches them to tap
    Allow reflexively — worse than no gate. Routine work tools need pre-allowing and
