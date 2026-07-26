@@ -73,6 +73,36 @@ Consequential decisions (merge, publish) are asked in chat as **outcomes** in
 human terms — never as raw tool prompts, which a non-technical person cannot
 meaningfully judge.
 
+## Known upstream quirks
+
+Workarounds we carry for bugs in dependencies. Each states the condition under
+which it should be **removed** — a workaround without a removal test becomes a
+mystery nobody dares delete.
+
+### The bot's own id must be in the Discord allowlist
+
+- **Observed in:** `discord@claude-plugins-official` **0.0.4**
+- **Symptom:** an inbound DM is received (👀 reaction fires, the agent composes an
+  answer) but every reply is rejected as *"channel … isn't allowlisted"*.
+- **Cause:** the outbound gate does `ch.recipientId ?? dmChannelUsers.get(id)`. In
+  the plugin's long-lived client `ch.recipientId` resolves to the **bot's own id**,
+  not the human's. Being non-null it short-circuits the `??`, so the map holding
+  the correct id is never consulted and the allowlist check fails.
+- **Workaround:** `provision.sh` reads the bot's id from `/users/@me` and adds it to
+  `allowFrom`, so the plugin's own check passes. Nothing is hardcoded.
+- **Why it is safe:** the bot never DMs itself, and replies only ever target
+  channels a message arrived on. It is also fail-safe — if upstream starts
+  returning the human's id, `allowFrom` still contains it.
+- **Remove when:** `bin/check-plugin-quirks.sh` reports the plugin version or the
+  gate expression has changed *and* a live DM reply succeeds without the bot's id
+  in `allowFrom`.
+
+**Do not "verify" this with a standalone probe.** Fetching the channel with a
+fresh client returns the *correct* recipient id, so a probe reports the bug fixed
+while the live path still fails. Reproducing it requires the plugin's own
+long-lived client state. That false signal cost two debugging sessions; the canary
+therefore watches for upstream *change* rather than trying to re-detect the bug.
+
 ## What's here
 
 | Path | What |

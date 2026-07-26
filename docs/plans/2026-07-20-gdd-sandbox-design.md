@@ -175,8 +175,13 @@ scoping by absence, under the hook layer, not a rule the agent can talk around.
 Supporting mechanisms:
 
 - **Docker `--restart unless-stopped`** restarts the whole container if it dies.
-- **`HEALTHCHECK`** = claude process alive + tty-log freshness (process-level; no
-  chat involved, so nothing leaks to an open channel).
+- **`HEALTHCHECK`** = claude process alive (process-level; no chat involved, so
+  nothing leaks to an open channel). **Correction (validated 2026-07-26):** an
+  earlier draft also required the tty log to be *fresh*. That is wrong — a session
+  idling correctly between messages writes nothing, so a healthy sandbox reports
+  `unhealthy`, and log mtime cannot distinguish idle from wedged anyway. Detecting
+  a genuinely wedged session needs a real probe, which belongs with the Layer-D
+  observability work.
 - **Chat-level liveness** ("is it really answering?") rides the operator's private
   PM to the agent — manual now, scriptable later. Full observability-stack wiring
   is Layer D.

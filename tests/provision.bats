@@ -13,6 +13,25 @@ setup() {
   # jq is real (present on host + image); patch-onboarding.sh uses it against $HOME.
 }
 
+@test "provision allowlists the bot's own id alongside the human's" {
+  # Upstream gate quirk: ch.recipientId resolves to the BOT, short-circuiting the
+  # fallback to dmChannelUsers, so the bot's own id must be in allowFrom.
+  export DISCORD_BOT_TOKEN="fake-token"
+  make_stub curl 'echo "{\"id\":\"999000111\"}"'
+  bash provision/provision.sh
+  run cat "$HOME/.claude/channels/discord/access.json"
+  [[ "$output" == *"999000111"* ]]
+  [[ "$output" == *"123"* ]]
+}
+
+@test "provision warns but continues when the bot id cannot be resolved" {
+  export DISCORD_BOT_TOKEN="fake-token"
+  make_stub curl 'echo ""'
+  run bash provision/provision.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"could not resolve the bot id"* ]]
+}
+
 @test "provision seeds the workspace from the seed when absent" {
   bash provision/provision.sh
   [ -d "$GDD_WORKSPACE" ]
