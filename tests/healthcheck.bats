@@ -12,6 +12,15 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "unhealthy when the agent is alive but its channel server is gone" {
+  # Observed after a host reboot: agent running, MCP server absent, bot offline,
+  # every message unanswered — while a process-only check reported healthy.
+  make_stub ps 'echo "   900"'
+  make_stub pgrep 'case "$*" in *claude-plugins-official/discord*) exit 1 ;; *) echo 1234 ;; esac'
+  run bash bin/healthcheck.sh
+  [ "$status" -ne 0 ]
+}
+
 @test "unhealthy when no session process exists" {
   make_stub pgrep 'exit 1'
   run bash bin/healthcheck.sh

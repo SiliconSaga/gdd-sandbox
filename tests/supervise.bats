@@ -22,6 +22,19 @@ setup() {
   [[ "$output" != *"dangerously-skip-permissions"* ]]
 }
 
+@test "the channel watchdog ends the session when its server disappears" {
+  # The agent does not exit when its channel dies, so nothing would notice.
+  export GDD_CHANNEL_GRACE=0 GDD_CHANNEL_POLL=0
+  # Agent present, channel server absent.
+  make_stub pgrep 'case "$*" in *claude-plugins-official/discord*) exit 1 ;; *) echo 1234 ;; esac'
+  make_stub pkill 'echo "pkill $*" >> "$STUB_LOG"'
+  # Keep the session "running" long enough for the watchdog to act.
+  make_stub script 'echo "$*" >> "$STUB_LOG"; sleep 1'
+  run bash bin/supervise.sh
+  [[ "$output" == *"channel server gone"* ]]
+  grep -q "pkill" "$STUB_LOG"
+}
+
 @test "a failed --continue falls back to a fresh session" {
   # Session history lives in ~/.claude, the sentinel on the workspace volume, so
   # they can desync ("No conversation found to continue"). Retrying --continue

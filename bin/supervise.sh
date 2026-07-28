@@ -12,9 +12,29 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # gate. Ids are `mcp__<server>__<tool>`; the server is `plugin:discord:discord`
 # per `claude mcp list`. Everything else stays gated.
 ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react}"
+# Channel-server watchdog knobs (see watch_channel below).
+CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
+CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
+CHANNEL_POLL="${GDD_CHANNEL_POLL:-30}"
 LAUNCHED="$WS/.gdd-sandbox-launched"
 TTY_LOG=/tmp/channels-tty.log
 FIFO=/tmp/claude-stdin
+
+# Watch the channel server for the life of a session. The agent does NOT exit when
+# its channel dies — observed after a host reboot: agent alive, MCP server absent,
+# bot offline, every message silently unanswered while Docker reported healthy.
+# Ending the session hands recovery to the supervisor loop, which relaunches.
+watch_channel() {
+  sleep "$CHANNEL_GRACE"
+  while pgrep -f 'claude .*--channels' >/dev/null; do
+    if ! pgrep -f "$CHANNEL_PATTERN" >/dev/null; then
+      echo "supervise: channel server gone; restarting the session" >&2
+      pkill -f 'claude .*--channels'
+      return 0
+    fi
+    sleep "$CHANNEL_POLL"
+  done
+}
 
 launch() {
   local cont="$1"   # "--continue" or ""
@@ -22,13 +42,15 @@ launch() {
   : > "$TTY_LOG"; rm -f "$FIFO"; mkfifo "$FIFO"
   sleep infinity > "$FIFO" &            # hold the FIFO open (drive prompts + no EOF)
   local w=$!
+  watch_channel &
+  local watcher=$!
   # -e so script returns the child's exit status; without it a failed session
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
     "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
-  kill "$w" 2>/dev/null || true
+  kill "$w" "$watcher" 2>/dev/null || true
   return "$rc"
 }
 
