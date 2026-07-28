@@ -37,6 +37,14 @@ Validated live on 2026-07-26 against a real Discord bot and a real site componen
 
 **Not yet done** (roughly in the order they should be tackled)
 
+0. **No end-to-end reachability check.** Both the healthcheck and the watchdog ask
+   whether the channel server *process* exists. That catches it dying, but not a
+   process that is alive with a dead connection. A network outage was survived —
+   the Discord client reconnected by itself — but that retry is bounded, so a long
+   outage, an expired token, or a server-side disconnect could still leave every
+   signal green while nobody can be reached. The real fix is to read the channel's
+   connection state, or a periodic self-check that proves reachability rather than
+   inferring it. Three distinct failures have now pointed at this.
 1. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
    pre-allowed, so anything else still relays a permission card to the chat user.
    Asking a non-technical person to approve "run jekyll build?" teaches them to tap
