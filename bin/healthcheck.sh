@@ -32,4 +32,21 @@ uptime_s="$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
 # The channel server is spawned by the session shortly after start; only demand it
 # once past the same startup window, so a healthy launch is not flagged mid-boot.
 pgrep -f "$CHANNEL_PATTERN" >/dev/null || exit 1
+
+# Finally, prove we can actually reach Discord with our credentials, rather than
+# inferring it from a process listing. Catches network loss and an expired or
+# revoked token — states where every process check passes and nobody is reachable.
+#
+# Rejected alternative: looking for an ESTABLISHED socket to Discord. A dropped
+# network leaves the old socket sitting in retransmit for minutes, so it reports
+# connected long after it isn't (verified by disconnecting the container).
+#
+# Honest limit: this proves the API is reachable and the token valid, not that the
+# gateway session is live. Closing that last gap needs the channel plugin to expose
+# its connection state.
+if [ "${GDD_HEALTH_PROBE_API:-1}" = "1" ] && [ -n "${DISCORD_BOT_TOKEN:-}" ]; then
+  curl -fsS --max-time "${GDD_HEALTH_PROBE_TIMEOUT:-5}" -o /dev/null \
+    -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+    "${GDD_HEALTH_PROBE_URL:-https://discord.com/api/v10/users/@me}" || exit 1
+fi
 exit 0

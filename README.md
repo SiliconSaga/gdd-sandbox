@@ -37,14 +37,6 @@ Validated live on 2026-07-26 against a real Discord bot and a real site componen
 
 **Not yet done** (roughly in the order they should be tackled)
 
-0. **No end-to-end reachability check.** Both the healthcheck and the watchdog ask
-   whether the channel server *process* exists. That catches it dying, but not a
-   process that is alive with a dead connection. A network outage was survived —
-   the Discord client reconnected by itself — but that retry is bounded, so a long
-   outage, an expired token, or a server-side disconnect could still leave every
-   signal green while nobody can be reached. The real fix is to read the channel's
-   connection state, or a periodic self-check that proves reachability rather than
-   inferring it. Three distinct failures have now pointed at this.
 1. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
    pre-allowed, so anything else still relays a permission card to the chat user.
    Asking a non-technical person to approve "run jekyll build?" teaches them to tap
@@ -104,9 +96,16 @@ allowlisted, and replies when the agent has an answer.
 - **Deliberate rotation** — when context has grown too large, `bin/rotate.sh`
   archives the session and starts a fresh one that re-orients from the persistent
   Thalamus. Safe precisely because the durable notes carry the important state.
-- **Health** — a container healthcheck asserts the session process is alive and
-  its log is fresh; Docker's restart policy covers whole-container death. Nothing
-  about liveness leaks into a user's chat.
+- **Health** — the healthcheck asserts three things in order: the session process
+  is up and past its startup window, its channel server exists, and Discord is
+  actually reachable with the bot's credentials. The last one matters because the
+  agent does not exit when its channel dies, so process checks alone report health
+  while nobody can be reached. Nothing about liveness leaks into a user's chat.
+- **What restarts, and what does not.** A dead channel *process* restarts the
+  session. An unreachable *network* does not: the Discord client reconnects on its
+  own, and cycling the session over a brief outage would throw away context to no
+  purpose. The outage shows up as `unhealthy` and is left to resolve itself — a
+  deliberate split between "broken, act" and "degraded, wait".
 
 A dead session that silently ghosts the person texting it is the exact failure
 this design cures.
