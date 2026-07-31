@@ -54,6 +54,21 @@ setup() {
   [[ "$output" == *"no runtime secrets"* ]]
 }
 
+@test "run.sh opts a shared channel in, requiring a mention by default" {
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env" --channel 555
+  run cat "$STUB_LOG"
+  [[ "$output" == *'"555"'* ]]
+  [[ "$output" == *'requireMention":true'* ]]
+}
+
+@test "run.sh honours --no-mention for a single-user channel" {
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env" --channel 555 --no-mention
+  run cat "$STUB_LOG"
+  [[ "$output" == *'requireMention":false'* ]]
+}
+
 @test "run.sh does not start the supervisor via docker exec" {
   # Regression guard: a supervisor started with `docker exec -d` dies with the
   # container, so the restart policy brings back a container with no agent

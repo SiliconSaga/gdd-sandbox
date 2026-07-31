@@ -19,8 +19,15 @@
 }
 
 @test "access template renders to valid JSON with the snowflake" {
-  run bash -c "sed 's/__ALLOWFROM__/[\"123\"]/' provision/access.json.template | jq -e '.allowFrom == [\"123\"]'"
+  run bash -c "sed -e 's/__ALLOWFROM__/[\"123\"]/' -e 's|__GROUPS__|{}|' provision/access.json.template | jq -e '.allowFrom == [\"123\"]'"
   [ "$status" -eq 0 ]
+}
+
+@test "access template leaves no unsubstituted placeholders" {
+  # A stray placeholder yields invalid JSON, and the plugin then moves the file
+  # aside as corrupt and silently falls back to pairing — inbound stops working.
+  run bash -c "sed -e 's/__ALLOWFROM__/[\"123\"]/' -e 's|__GROUPS__|{}|' provision/access.json.template"
+  [[ "$output" != *"__"* ]]
 }
 
 # Pre-allow assertions now live in tests/supervise.bats: the chat tools are

@@ -16,6 +16,11 @@ ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plug
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
 CHANNEL_POLL="${GDD_CHANNEL_POLL:-30}"
+# Point the session at its briefing. Kept to a single line with no quotes: it is
+# embedded in the `script -c` command string, where newlines and quoting break.
+# The substance lives in the briefing file, which is versioned and testable.
+BRIEFING="${GDD_BRIEFING_PATH:-/tmp/gdd-sandbox-briefing.md}"
+PRIMER="You are the agent for a GDD sandboxed workspace at ${WS}, scoped to the component ${GDD_TARGET:-unknown}. Chat messages come from a non-technical person and ask for real changes to that component, not for a reply written in chat. Before your first action, read ${BRIEFING} and follow it."
 LAUNCHED="$WS/.gdd-sandbox-launched"
 TTY_LOG=/tmp/channels-tty.log
 FIFO=/tmp/claude-stdin
@@ -48,7 +53,7 @@ launch() {
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
-    "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' $cont" \
+    "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
   kill "$w" "$watcher" 2>/dev/null || true
   return "$rc"

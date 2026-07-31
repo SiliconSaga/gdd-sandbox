@@ -57,9 +57,27 @@ if [ -n "${DISCORD_BOT_TOKEN:-}" ]; then
   fi
 fi
 
+# Guild channels are OFF by default in the plugin and must be opted in per
+# channel, keyed on the CHANNEL snowflake (not the guild). allowFrom covers DMs
+# only, so a shared channel needs this or the agent can receive but never reply.
+#
+# NOT named GROUPS: that is a bash built-in array of the user's group ids, so the
+# assignment is silently ignored and the value expands to a numeric gid instead of
+# JSON. Cost an hour; do not reintroduce it.
+CHANNEL_GROUPS="${GDD_CHANNEL_GROUPS:-}"
+[ -n "$CHANNEL_GROUPS" ] || CHANNEL_GROUPS='{}'
+
 mkdir -p "$HOME/.claude/channels/discord"
-sed "s/__ALLOWFROM__/$ALLOWFROM/" "$HERE/access.json.template" \
+sed -e "s/__ALLOWFROM__/$ALLOWFROM/" -e "s|__GROUPS__|$CHANNEL_GROUPS|" \
+  "$HERE/access.json.template" \
   > "$HOME/.claude/channels/discord/access.json"
+
+# Render the agent briefing. Without it the session is a bare Claude Code
+# instance that happens to receive chat messages: asked to change the project it
+# will compose a plausible reply and touch nothing, because nothing told it what
+# it is, what it is scoped to, or that chat requests mean real work.
+sed "s/__TARGET__/${GDD_TARGET:-unknown}/g" "$HERE/BRIEFING.md" \
+  > "${GDD_BRIEFING_PATH:-/tmp/gdd-sandbox-briefing.md}"
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"
 
 # 5. Report whether the upstream quirks we work around still look the same.

@@ -32,6 +32,29 @@ setup() {
   [[ "$output" == *"could not resolve the bot id"* ]]
 }
 
+@test "provision renders the briefing with the target substituted" {
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"components/ken-site"* ]]
+  [[ "$output" != *"__TARGET__"* ]]
+}
+
+@test "provision opts a shared guild channel into the access config" {
+  # allowFrom covers DMs only; a guild channel stays disabled until opted in by
+  # channel id, so a shared channel can receive but never reply without this.
+  export GDD_CHANNEL_GROUPS='{"999":{"requireMention":true,"allowFrom":[]}}'
+  bash provision/provision.sh
+  run jq -e '.groups["999"].requireMention == true' "$HOME/.claude/channels/discord/access.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "provision writes valid access json with no channel configured" {
+  bash provision/provision.sh
+  run jq -e '.groups == {} and (.allowFrom | length > 0)' "$HOME/.claude/channels/discord/access.json"
+  [ "$status" -eq 0 ]
+}
+
 @test "provision seeds the workspace from the seed when absent" {
   bash provision/provision.sh
   [ -d "$GDD_WORKSPACE" ]

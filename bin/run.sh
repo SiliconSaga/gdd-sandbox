@@ -9,6 +9,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WS_ROOT="$(cd "$ROOT/../.." && pwd)"
 IMAGE="${GDD_SANDBOX_IMAGE:-gdd-sandbox:latest}"
 TARGET="" NAME="" SECRETS="$WS_ROOT/.env" TARGET_REPO="" REALM_REPO="" ALLOWFROM="[]"
+CHANNEL="" REQUIRE_MENTION="true"
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) TARGET="$2"; shift 2 ;;
@@ -17,6 +18,8 @@ while [ $# -gt 0 ]; do
     --target-repo) TARGET_REPO="$2"; shift 2 ;;
     --realm-repo) REALM_REPO="$2"; shift 2 ;;
     --allowfrom) ALLOWFROM="$2"; shift 2 ;;
+    --channel) CHANNEL="$2"; shift 2 ;;
+    --no-mention) REQUIRE_MENTION="false"; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -46,11 +49,26 @@ fi
 # in the container layer it dies with the container while the launch sentinel on
 # the workspace volume survives — every relaunch then asks to continue a session
 # that no longer exists.
+# A shared channel (operator + user + agent) is a guild channel, which the plugin
+# leaves disabled until opted in by CHANNEL id. requireMention keeps the agent
+# quiet while the humans talk to each other; --no-mention suits a channel
+# dedicated to one user, who should not have to remember to tag anyone.
+#
+# NOT named GROUPS: that is a bash built-in array of the user's group ids, so the
+# assignment is silently ignored and the value expands to a numeric gid instead of
+# JSON. Cost an hour; do not reintroduce it.
+CHANNEL_GROUPS='{}'
+if [ -n "$CHANNEL" ]; then
+  CHANNEL_GROUPS="$(jq -cn --arg ch "$CHANNEL" --argjson mention "$REQUIRE_MENTION" \
+    '{($ch): {requireMention: $mention, allowFrom: []}}')"
+fi
+
 VOL="gdd-sandbox-$TARGET-ws"
 ws docker run -d --name "$NAME" --restart unless-stopped \
   --env-file "$(ws_host_path "$RUNTIME_ENV")" \
   -e "GDD_TARGET=$TARGET" -e "GDD_TARGET_REPO=$TARGET_REPO" \
   -e "GDD_REALM_REPO=$REALM_REPO" -e "GDD_ALLOWFROM=$ALLOWFROM" \
+  -e "GDD_CHANNEL_GROUPS=$CHANNEL_GROUPS" \
   -e "GDD_WORKSPACE=/work/ws" \
   -v "$VOL:/work/ws" \
   -v "$VOL-claude:/root/.claude" \

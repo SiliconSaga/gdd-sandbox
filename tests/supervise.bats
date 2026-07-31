@@ -10,6 +10,20 @@ setup() {
   make_stub ws 'exit 0'
 }
 
+@test "launch briefs the session on what it is and what it is scoped to" {
+  # Without this the session is a bare agent that happens to receive chat: asked
+  # to change the project it composes a reply and touches nothing.
+  export GDD_TARGET=ken-site
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--append-system-prompt"* ]]
+  [[ "$output" == *"ken-site"* ]]
+  [[ "$output" == *"gdd-sandbox-briefing.md"* ]]
+  # The primer is embedded in a `script -c` string: newlines would break it.
+  run bash -c "grep -c '' \"$STUB_LOG\""
+  [ "$output" = "1" ]
+}
+
 @test "launch pre-allows only the chat reply/react tools" {
   bash bin/supervise.sh
   run cat "$STUB_LOG"
