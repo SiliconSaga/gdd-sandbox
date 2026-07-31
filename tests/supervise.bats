@@ -24,16 +24,40 @@ setup() {
   [ "$output" = "1" ]
 }
 
-@test "launch pre-allows only the chat reply/react tools" {
+@test "launch pre-allows the chat and routine work tools" {
+  # Observed from a real request: "add a post" needs Read then Write, and a
+  # permission card for each is the rubber-stamp trap for a non-technical user.
   bash bin/supervise.sh
   run cat "$STUB_LOG"
   [[ "$output" == *"--allowedTools"* ]]
   [[ "$output" == *"mcp__plugin:discord:discord__reply"* ]]
-  [[ "$output" == *"mcp__plugin:discord:discord__react"* ]]
-  # Nothing broad, and never a blanket bypass.
-  [[ "$output" != *"Bash"* ]]
+  [[ "$output" == *"Read"* ]]
+  [[ "$output" == *"Write"* ]]
+  [[ "$output" == *"ws commit"* ]]
+  # Never a blanket bypass.
   [[ "$output" != *"bypassPermissions"* ]]
   [[ "$output" != *"dangerously-skip-permissions"* ]]
+}
+
+@test "launch keeps publishing behind a prompt" {
+  # Nothing should reach the live site without a human saying yes. The design
+  # moves this into chat once the concierge workflow exists; until then the
+  # permission prompt is the safer placeholder.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" != *"ws push"* ]]
+  [[ "$output" != *"ws cr"* ]]
+}
+
+@test "launch hard-denies destructive commands" {
+  # No card and no override: the person on the other end cannot judge these, so
+  # an "ask" has no safe answerer.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--disallowedTools"* ]]
+  [[ "$output" == *"rm "* ]]
+  [[ "$output" == *"git push --force"* ]]
+  [[ "$output" == *"sudo"* ]]
 }
 
 @test "the channel watchdog ends the session when its server disappears" {

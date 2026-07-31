@@ -11,7 +11,23 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # rubber-stamp trap — they learn to tap Allow reflexively, which is worse than no
 # gate. Ids are `mcp__<server>__<tool>`; the server is `plugin:discord:discord`
 # per `claude mcp list`. Everything else stays gated.
-ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react}"
+#
+# The chat tools plus the routine work tools, observed from a real request rather
+# than guessed: answering "add a post" needs Read then Write, and a card for each
+# is the rubber-stamp trap — a non-technical user cannot evaluate "allow Read?" and
+# learns to approve everything, which is worse than no gate.
+#
+# Edit/Write are allowed unqualified because the container holds ONLY in-scope
+# repositories: the mount boundary does the containing, not the prompt.
+#
+# Publishing is deliberately NOT here. `ws push` and `ws cr` still raise a card, so
+# nothing reaches the live site without a human saying yes. The design puts that
+# decision in chat, owned by the concierge workflow; until that exists, the prompt
+# is the safer placeholder.
+ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(bundle exec jekyll *)}"
+# Hard denials: destructive or out-of-scope, with no card and no override. An "ask"
+# has no safe answerer here — the person on the other end cannot judge these.
+DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
 # Channel-server watchdog knobs (see watch_channel below).
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
@@ -53,7 +69,7 @@ launch() {
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
-    "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
+    "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
   kill "$w" "$watcher" 2>/dev/null || true
   return "$rc"

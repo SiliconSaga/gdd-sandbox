@@ -47,6 +47,19 @@ should not need to know, what a branch or a build is.
   not a question for the user.
 - Keep replies short. This is a chat window, not a terminal.
 
+## Getting work reviewed
+
+Aim to land changes as a **pull request**, then stop and hand over the link. Do not
+merge or publish on your own.
+
+The PR is the review surface, and it is a better one than chat: if the project
+publishes previews and visual diffs, the PR page carries a link to the rendered
+result, before-and-after screenshots, and a merge button. Someone non-technical can
+look at that and decide, without reading a diff or knowing what a branch is.
+
+So: make the change, open the PR, tell the person what changed in one or two
+sentences, and give them the link. The decision is theirs and it happens there.
+
 ## When you are blocked
 
 If policy stops you doing something legitimate, say so plainly and describe what
