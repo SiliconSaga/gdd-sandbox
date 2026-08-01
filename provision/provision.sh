@@ -24,6 +24,33 @@ if [ -n "${GDD_TARGET_REPO:-}" ] && [ ! -e "components/$GDD_TARGET/.git" ]; then
   git clone "$GDD_TARGET_REPO" "components/$GDD_TARGET"
 fi
 
+# 2b. Give the workspace the sandbox user's own GitHub identity, if one was
+# provided. `ws push` / `gh` read GH_TOKEN from the workspace .env, which is
+# git-ignored and lives on the volume rather than in the image.
+#
+# The token belongs to a dedicated machine account with a fine-grained grant on
+# the target repository alone, so the blast radius is that one repo: it cannot
+# see, let alone write, anything else the operator owns. Commits are attributed to
+# that account, which keeps agent-authored history honest and revocation to a
+# single token.
+if [ -n "${GDD_GITHUB_TOKEN:-}" ]; then
+  ws_env="$WS/.env"
+  # Rewrite rather than append, so repeated provisioning cannot stack duplicates.
+  if [ -f "$ws_env" ]; then
+    grep -v '^GH_TOKEN=' "$ws_env" > "$ws_env.tmp" || true
+    mv "$ws_env.tmp" "$ws_env"
+  fi
+  printf 'GH_TOKEN=%s\n' "$GDD_GITHUB_TOKEN" >> "$ws_env"
+  chmod 600 "$ws_env" 2>/dev/null || true
+  echo "provision: workspace GitHub token installed (value not logged)"
+
+  git -C "$WS/components/$GDD_TARGET" config user.name "${GDD_GIT_AUTHOR_NAME:-Kencierge}" 2>/dev/null || true
+  git -C "$WS/components/$GDD_TARGET" config user.email \
+    "${GDD_GIT_AUTHOR_EMAIL:-kencierge@users.noreply.github.com}" 2>/dev/null || true
+else
+  echo "provision: no GitHub token supplied — the agent can draft but not publish"
+fi
+
 # 3. Install the Discord channel plugin (brings its Bun deps). Provisioning runs
 # on every container start, so skip when it is already present — re-adding the
 # marketplace errors, and a restart should be fast.

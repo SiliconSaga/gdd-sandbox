@@ -32,6 +32,44 @@ setup() {
   [[ "$output" == *"could not resolve the bot id"* ]]
 }
 
+@test "provision installs the workspace GitHub token without logging it" {
+  export GDD_GITHUB_TOKEN="ghp_secret_value"
+  run bash provision/provision.sh
+  [[ "$output" != *"ghp_secret_value"* ]]
+  run grep -c '^GH_TOKEN=ghp_secret_value$' "$GDD_WORKSPACE/.env"
+  [ "$output" = "1" ]
+}
+
+@test "provision does not stack duplicate tokens across restarts" {
+  # Provisioning runs on every container start; appending blindly would leave a
+  # stale token above the current one.
+  export GDD_GITHUB_TOKEN="tok_one"
+  bash provision/provision.sh
+  export GDD_GITHUB_TOKEN="tok_two"
+  bash provision/provision.sh
+  run grep -c '^GH_TOKEN=' "$GDD_WORKSPACE/.env"
+  [ "$output" = "1" ]
+  run grep -c '^GH_TOKEN=tok_two$' "$GDD_WORKSPACE/.env"
+  [ "$output" = "1" ]
+}
+
+@test "provision says plainly when no GitHub token is supplied" {
+  run bash provision/provision.sh
+  [[ "$output" == *"draft but not publish"* ]]
+}
+
+@test "the operator's own GH_TOKEN never reaches the container" {
+  # Same file, different variable: only the sandbox user's token travels.
+  src="$BATS_TEST_TMPDIR/op.env"
+  dest="$BATS_TEST_TMPDIR/runtime.env"
+  printf 'GH_TOKEN=operator_personal\nGDD_GITHUB_TOKEN=sandbox_machine\n' > "$src"
+  . bin/lib.sh
+  ws_write_runtime_env "$src" "$dest"
+  run cat "$dest"
+  [[ "$output" == *"GDD_GITHUB_TOKEN=sandbox_machine"* ]]
+  [[ "$output" != *"operator_personal"* ]]
+}
+
 @test "provision renders the briefing with the target substituted" {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh

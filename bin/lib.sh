@@ -21,9 +21,16 @@ ws_host_path() {
 
 # The runtime secrets the sandbox is allowed to receive. Deliberately a short
 # allowlist: everything else in the operator's .env (GH_TOKEN, HARBOR_ADMIN_PW,
-# ...) stays OUT of the container. The user's own push token belongs in the
-# workspace .env on the volume, not here.
-WS_RUNTIME_SECRETS='CLAUDE_CODE_OAUTH_TOKEN|DISCORD_BOT_TOKEN'
+# ...) stays OUT of the container.
+#
+# GDD_GITHUB_TOKEN is the SANDBOX USER's own token — a dedicated machine account
+# with a fine-grained grant on the target repository only. It is named distinctly
+# so the operator's personal GH_TOKEN cannot be picked up by accident: same file,
+# different variable, and only this one travels.
+#
+# It arrives through the env file rather than a command-line argument on purpose;
+# arguments are visible to anyone who can list processes.
+WS_RUNTIME_SECRETS='CLAUDE_CODE_OAUTH_TOKEN|DISCORD_BOT_TOKEN|GDD_GITHUB_TOKEN'
 
 # Write a minimal env file for `docker --env-file` from an operator .env.
 #

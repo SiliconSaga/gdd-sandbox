@@ -119,6 +119,41 @@ Consequential decisions (merge, publish) are asked in chat as **outcomes** in
 human terms — never as raw tool prompts, which a non-technical person cannot
 meaningfully judge.
 
+## Giving the sandbox a GitHub identity
+
+The agent can draft without any GitHub access at all — it edits files on its own
+volume and stops. It only needs credentials to publish, and it should have its own
+rather than borrow anyone's.
+
+**Set up once, with the person you are helping:**
+
+1. **Create a dedicated GitHub account** for the sandbox. This is the identity its
+   commits are attributed to, so agent-authored history stays honest about who
+   wrote what, and revoking access is one token rather than an audit.
+2. **Give that account access to the target repository only** — as a collaborator
+   on that one repo. Nothing else you own is visible to it.
+3. **Issue a fine-grained personal access token** on that account, scoped to that
+   single repository, with Contents and Pull requests write. The scoping is what
+   bounds the blast radius: not a promise the agent will behave, but a grant that
+   cannot reach further.
+4. **Protect the default branch** so changes have to arrive as pull requests.
+5. Put the token in the operator's env file as **`GDD_GITHUB_TOKEN`**. The name is
+   deliberately distinct from `GH_TOKEN`, so the operator's own credentials cannot
+   be picked up by mistake — same file, different variable, and only this one is
+   passed through.
+
+Provisioning installs it into the workspace's git-ignored `.env` and sets the
+commit identity. It is never written into the image, never passed as a command-line
+argument (those are visible to anyone listing processes), and never logged.
+
+**Why a scoped account rather than a fork.** Forking is the more usual isolation
+story, but a pull request *from a fork* gets a read-only token in CI, which
+disables the preview build and the visual-diff comment — exactly the evidence a
+non-technical reviewer relies on. A dedicated account with a single-repo grant gets
+the same practical blast radius while keeping the review surface intact. The fork
+route is the right answer when the sandbox serves someone you do not know
+personally, and it needs the CI split into build and trusted-publish stages first.
+
 ## Known upstream quirks
 
 Workarounds we carry for bugs in dependencies. Each states the condition under
