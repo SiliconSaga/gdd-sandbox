@@ -146,6 +146,14 @@ Provisioning installs it into the workspace's git-ignored `.env` and sets the
 commit identity. It is never written into the image, never passed as a command-line
 argument (those are visible to anyone listing processes), and never logged.
 
+**What it may and may not do with that access.** The agent can branch, commit,
+push and open a pull request without prompting — that is routine mechanics, and a
+permission card asking a non-technical person to approve it protects nothing.
+Merging and releasing are denied outright, not merely left unapproved, so the
+change reaches the live site only when a human clicks merge on a PR that shows
+them the preview and the screenshots. Branch protection is what makes that hold;
+without it the merge button is not the only way in.
+
 **Why a scoped account rather than a fork.** Forking is the more usual isolation
 story, but a pull request *from a fork* gets a read-only token in CI, which
 disables the preview build and the visual-diff comment — exactly the evidence a

@@ -39,14 +39,26 @@ setup() {
   [[ "$output" != *"dangerously-skip-permissions"* ]]
 }
 
-@test "launch keeps publishing behind a prompt" {
-  # Nothing should reach the live site without a human saying yes. The design
-  # moves this into chat once the concierge workflow exists; until then the
-  # permission prompt is the safer placeholder.
+@test "launch lets the agent open a pull request" {
+  # The decision belongs on the PR page, which carries the preview and the
+  # before/after screenshots — not on a permission card nobody can evaluate.
   bash bin/supervise.sh
   run cat "$STUB_LOG"
-  [[ "$output" != *"ws push"* ]]
-  [[ "$output" != *"ws cr"* ]]
+  [[ "$output" == *"ws push"* ]]
+  [[ "$output" == *"ws cr"* ]]
+}
+
+@test "launch never lets the agent merge or release" {
+  # Denied explicitly rather than merely left out: `gh pr merge` would otherwise
+  # be reachable, and "never merges" has to be enforced, not implied. What
+  # protects the live site is branch protection plus a human clicking merge.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"gh pr merge"* ]]
+  [[ "$output" == *"gh release"* ]]
+  # ...and those appear in the DENY list, not the allow list.
+  allow="${output%%--disallowedTools*}"
+  [[ "$allow" != *"gh pr merge"* ]]
 }
 
 @test "launch hard-denies destructive commands" {

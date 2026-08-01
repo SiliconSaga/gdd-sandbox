@@ -20,14 +20,19 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # Edit/Write are allowed unqualified because the container holds ONLY in-scope
 # repositories: the mount boundary does the containing, not the prompt.
 #
-# Publishing is deliberately NOT here. `ws push` and `ws cr` still raise a card, so
-# nothing reaches the live site without a human saying yes. The design puts that
-# decision in chat, owned by the concierge workflow; until that exists, the prompt
-# is the safer placeholder.
-ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(bundle exec jekyll *)}"
-# Hard denials: destructive or out-of-scope, with no card and no override. An "ask"
-# has no safe answerer here — the person on the other end cannot judge these.
-DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
+# Opening a pull request is allowed; merging never is. The agent may branch, push
+# and raise a PR without prompting, because the decision belongs on the PR page —
+# which carries the preview link and the before/after screenshots — rather than on
+# a permission card nobody can evaluate. What protects the live site is branch
+# protection plus the merge button, not a prompt.
+ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)}"
+# Hard denials: destructive, out-of-scope, or irreversible — no card, no override.
+# An "ask" has no safe answerer here; the person on the other end cannot judge it.
+#
+# Merging and releasing are denied explicitly rather than merely left out: `gh pr
+# merge` would otherwise be reachable, and "never merges" has to be enforced, not
+# implied. Publishing stays a human act on the PR page.
+DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
 # Channel-server watchdog knobs (see watch_channel below).
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
