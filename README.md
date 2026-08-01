@@ -110,6 +110,13 @@ allowlisted, and replies when the agent has an answer.
 A dead session that silently ghosts the person texting it is the exact failure
 this design cures.
 
+**The host runtime is part of the chain.** A restart policy only fires if the
+container runtime is running, so on a machine where Docker starts manually the
+sandbox stays down after a reboot until someone opens it — recovery that looks
+automatic in testing because a human quietly supplied the missing step. For an
+always-on sandbox, enable the runtime's auto-start, or host it where the daemon
+runs as a system service.
+
 ## Safety
 
 The container holds only the in-scope repositories, so out-of-scope work is

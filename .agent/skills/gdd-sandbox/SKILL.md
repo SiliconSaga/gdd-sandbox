@@ -108,6 +108,34 @@ self-clear as urgent.
 For a chat-level "is it really answering?" check, DM the bot from the operator
 account. Wiring liveness into an observability stack is a later addition.
 
+## Reading the session log — and what not to trust
+
+`/tmp/channels-tty.log` is a raw terminal capture, not a transcript. It is the
+right tool for diagnosing the *session* — did it launch, with which flags, did it
+crash, did the supervisor relaunch it. It is a poor and actively misleading source
+for what was *said* or *done*.
+
+**Text on the input line (the bottom row, after `❯`) is not user input.** Claude
+Code renders a *predicted next prompt* there. It looks exactly like a message the
+person just sent, and reading it as one has produced confident, wrong reports more
+than once: a suggested `6pm at the West Orange library` was mistaken for the user
+supplying a venue, and then for the agent inventing one. Neither happened.
+
+More generally, do not treat anything on that screen as evidence. Check the thing
+itself:
+
+| Question | Ground truth |
+|---|---|
+| What did the person actually say? | The chat channel, or ask them |
+| What did the agent actually change? | `git -C /work/ws/components/<target> status` and the file contents |
+| Did a reply reach them? | The chat channel — not "the agent composed one" |
+| Is it reachable? | `bin/healthcheck.sh`, not a process listing |
+
+The recurring failure is treating a proxy for the thing: a process that exists for
+a service that answers, an absent prompt for a granted permission, rendered text
+for a transcript. When reporting state to someone who is relying on it, verify at
+the level of the claim.
+
 ## Safety posture
 
 - Pre-allow **only** the chat `reply`/`react` tools, via `--allowedTools` on the
