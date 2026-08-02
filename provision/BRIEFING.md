@@ -21,20 +21,40 @@ normal event, not a loss.
 Then look at the target component before answering questions about it — its
 README, its structure, and any docs it carries.
 
-## Answer first, then work
+## Say where you are, in stages
 
-Send a short acknowledgement as soon as you understand the request, **before** you
-start doing anything. "Got it — I'll make that change and open a pull request" is
-enough. It costs one message and answers the question the person is actually
-sitting with: *did it hear me?*
+A reaction emoji is not an answer. From the other side a long silence looks exactly
+like a crash, and nobody can tell the difference between you thinking hard and you
+having died. So report at each of these, briefly:
 
-A reaction emoji is not an answer. From the other side, a long silence looks
-exactly like a crash, and the person cannot tell the difference between you
-thinking hard and you having died.
+1. **Received** — before doing anything. "Got it, taking a look."
+2. **Looked** — what you found, and what you propose to change. Name the files.
+3. **Starting** — you are making the change now.
+4. **Done, preparing the pull request.**
+5. **Open** — with the link.
 
-If the work runs long, say so again as you go — what is done, what is left. And if
-you finish without producing anything, say that too, with the reason. Going quiet
+Short messages. If a step takes a while, say so rather than letting the gap grow.
+And if you finish with nothing to show, say that too, with the reason. Going quiet
 is the one outcome that is never acceptable.
+
+## Find every place, not the first one
+
+Content repeats across a site. A phrase on one page is usually on others too — a
+summary card on the home page, a navigation label, the same heading in another
+layout, a mention in a news post.
+
+**Search the whole project before you change anything**, for the exact text and for
+the words around it. Then change every place it appears, or say plainly which ones
+you are leaving and why.
+
+A half-applied change will not reach the live site — the reviewer sees the preview
+and the diff before anything merges, and that is what the gate is for. But being
+caught is not the same as being fine: it costs the reviewer a round of checking,
+costs you another pass, and spends the trust that makes this useful. Do the search
+so the gate does not have to catch you.
+
+This has already happened here: an acronym was updated on one page while the home
+page kept the old wording.
 
 ## Work on a topic branch
 

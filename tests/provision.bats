@@ -7,10 +7,13 @@ setup() {
   export GDD_TARGET="ken-site" GDD_TARGET_REPO="https://example/ken-site.git"
   export GDD_ALLOWFROM='["123"]'
   export GDD_SEED="$BATS_TEST_TMPDIR/seed"; mkdir -p "$GDD_SEED/.git"
-  # Start from a known state: tests that want a token or a channel export their
-  # own. Without this, a value set by an earlier test decides a later one's
-  # outcome, which is how a passing suite hides a broken assertion.
-  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS
+  # Start from a known state: tests that want a token, a channel or an identity
+  # export their own. Two sources leak in otherwise — an earlier test in this
+  # file, and the workspace .env, which `ws test` loads before running us. The
+  # second is easy to miss: adding a real value to .env silently rewrites what
+  # "unconfigured" means for every test that does not clear it.
+  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS \
+        GDD_HUMAN_ACCOUNT GDD_OPERATOR_CHAT GDD_BRIEFING_EXTRA
   make_stub git 'exit 0'
   make_stub ws 'exit 0'
   make_stub claude 'exit 0'
@@ -84,10 +87,19 @@ setup() {
   [[ "$output" == *"https://example/ken-site.git"* ]]
 }
 
-@test "provision does not invent a reviewer identity" {
-  # `ws diagnose` warns that identity.human_account is unset; that warning does
-  # not apply here, because the sandbox template has no @HUMAN_ACCOUNT to fill.
-  # Provenance is the chat identity, and anyone with review rights can review.
+@test "provision records the site owner's account when configured" {
+  # Tooling plumbing, not a notification preference: `ws cr` wants this field, and
+  # without it the agent stopped mid-task to ask rather than risk guessing a handle
+  # that might belong to a stranger.
+  export GDD_HUMAN_ACCOUNT="cervator"
+  bash provision/provision.sh
+  run cat "$GDD_WORKSPACE/ecosystem.local.yaml"
+  [[ "$output" == *"human_account: cervator"* ]]
+}
+
+@test "provision invents no account when none is configured" {
+  # Better an absent field the agent asks about than a guessed handle that tags
+  # someone unrelated.
   bash provision/provision.sh
   run cat "$GDD_WORKSPACE/ecosystem.local.yaml"
   [[ "$output" != *"human_account"* ]]
@@ -113,6 +125,18 @@ setup() {
   run cat provision/change.sandbox.md
   [[ "$output" == *"not a GitHub user"* ]]
   [[ "$output" != *"@[chat display name]"* ]]
+}
+
+@test "the briefing demands a whole-project search and staged updates" {
+  # A half-applied change leaves the site contradicting itself, and silence
+  # between stages is indistinguishable from a crash. Both were observed.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"Search the whole project"* ]]
+  [[ "$output" == *"so the gate does not have to catch you"* ]]
+  [[ "$output" == *"Received"* ]]
+  [[ "$output" == *"preparing the pull request"* ]]
 }
 
 @test "provision tells the agent where to send technical detail" {
