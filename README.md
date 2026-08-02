@@ -169,6 +169,74 @@ the same practical blast radius while keeping the review surface intact. The for
 route is the right answer when the sandbox serves someone you do not know
 personally, and it needs the CI split into build and trusted-publish stages first.
 
+## Configuration
+
+Settings live in the operator's env file (the workspace `.env` by default, or
+whatever `--secrets` points at). Per-launch choices are flags on `run.sh`.
+
+### What the sandbox needs to work
+
+| Setting | What it is |
+|---|---|
+| `CLAUDE_CODE_OAUTH_TOKEN` | Subscription token from `claude setup-token`. This is what the agent runs on — no API key, no metered billing. **Never set `ANTHROPIC_API_KEY`**: it outranks this and silently switches to paid API calls. `run.sh` refuses a file containing it. |
+| `DISCORD_BOT_TOKEN` | The bot's token, from the Developer Portal. How it reaches the chat channel. |
+
+With only these two, the sandbox runs and can read, edit and commit — it simply
+cannot publish. That is a legitimate mode, and preflight reports it as such rather
+than treating it as broken.
+
+### What it needs to open pull requests
+
+| Setting | What it is |
+|---|---|
+| `GDD_GITHUB_TOKEN` | The **sandbox's own** token, from its dedicated machine account. Deliberately not called `GH_TOKEN`, so the operator's personal credentials in the same file cannot be picked up by mistake — only this one is passed through. |
+| `GDD_GITHUB_USER` | The machine account's name. Becomes the commit author. |
+| `GDD_GITHUB_EMAIL` | The machine account's email. Use its **no-reply** address: if the account hides its real address, the code host rejects the push *after* the work is done. |
+| `GDD_HUMAN_ACCOUNT` | The site owner's account on the code host. Plumbing that `ws cr` expects; it does not appear in the pull request body. Without it the agent stops mid-task to ask, rather than guessing a handle that might belong to a stranger. |
+
+### Worth setting
+
+| Setting | What it is |
+|---|---|
+| `GDD_OPERATOR_CHAT` | Your own chat id. When the agent is blocked, the person who asked gets plain language and **you get the technical detail by direct message**. Nothing else is watching this sandbox, so that message is the alert. |
+| `GDD_BRIEFING_EXTRA` | Free text appended to the agent's briefing: what this site is, who reads it, house style — anything the shipped briefing cannot know. Takes effect on restart, no rebuild. |
+| `GDD_PUBLIC_EMAIL_OK` | Set to `1` to declare that a non-no-reply commit email is deliberate, so preflight stops advising about it. |
+
+### Per-launch flags
+
+```bash
+bash bin/run.sh --target <component> [options]
+```
+
+| Flag | Meaning |
+|---|---|
+| `--target` | **Required.** The component the sandbox is scoped to. |
+| `--allowfrom` | JSON array of chat user ids allowed to send direct messages. |
+| `--channel` | A shared channel id to work in. Guild channels are disabled until opted in this way. |
+| `--no-mention` | Respond to everything in that channel. Default is to require a mention, which keeps the agent quiet while humans talk to each other. |
+| `--name` | Container name. Defaults to `gdd-sandbox-<target>`. |
+| `--secrets` | Path to the env file. Defaults to the workspace `.env`. |
+| `--target-repo`, `--realm-repo` | Override the repositories to clone; the target is otherwise resolved from ecosystem config. |
+
+### Tuning
+
+The watchdogs, health thresholds, permission lists and file paths are all
+overridable — see the `${GDD_...:-default}` lines at the top of `bin/supervise.sh`,
+`bin/healthcheck.sh` and `bin/preflight.sh`. The defaults are what this component
+was tested with; change them to debug, not routinely.
+
+### Checking it
+
+Provisioning runs `bin/preflight.sh` on every start and reports anything missing,
+graded by whether it blocks work, degrades it, or merely stores up an
+interruption. The same report is written where the agent reads it, so an
+under-configured sandbox says what it cannot do when asked, instead of failing
+partway through. Run it any time:
+
+```bash
+ws docker exec <name> bash /opt/gdd-sandbox/bin/preflight.sh
+```
+
 ## Known upstream quirks
 
 Workarounds we carry for bugs in dependencies. Each states the condition under
