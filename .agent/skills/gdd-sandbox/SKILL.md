@@ -155,6 +155,13 @@ the level of the claim.
 
 ## Known caveats
 
+- **`ws diagnose` warns that `identity.human_account` is unset. Leave it.** That
+  field fills an `@HUMAN_ACCOUNT` mention in change-request bodies, and the
+  sandbox's template has no such placeholder — provenance comes from the chat
+  identity instead. Anyone with review rights can review; there is nobody to ping,
+  and setting it would mean inventing a name to satisfy a check rather than to
+  serve a reader.
+
 - `--channels` is a hidden research-preview flag; the protocol may change. Keep the
   dependency isolated behind the supervisor.
 - After a container restart, the plugin's in-memory DM map is empty — always answer

@@ -10,8 +10,7 @@ setup() {
   # Start from a known state: tests that want a token or a channel export their
   # own. Without this, a value set by an earlier test decides a later one's
   # outcome, which is how a passing suite hides a broken assertion.
-  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS \
-        GDD_REVIEW_ACCOUNT
+  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS
   make_stub git 'exit 0'
   make_stub ws 'exit 0'
   make_stub claude 'exit 0'
@@ -85,13 +84,13 @@ setup() {
   [[ "$output" == *"https://example/ken-site.git"* ]]
 }
 
-@test "provision records the human reviewer when one is configured" {
-  # `ws cr` fills the request body from this; unset, the reviewer receives a pull
-  # request addressed to a placeholder.
-  export GDD_REVIEW_ACCOUNT="Cervator"
+@test "provision does not invent a reviewer identity" {
+  # `ws diagnose` warns that identity.human_account is unset; that warning does
+  # not apply here, because the sandbox template has no @HUMAN_ACCOUNT to fill.
+  # Provenance is the chat identity, and anyone with review rights can review.
   bash provision/provision.sh
   run cat "$GDD_WORKSPACE/ecosystem.local.yaml"
-  [[ "$output" == *"human_account: Cervator"* ]]
+  [[ "$output" != *"human_account"* ]]
 }
 
 @test "provision installs the chat-provenance change template" {
