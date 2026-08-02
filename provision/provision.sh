@@ -35,6 +35,14 @@ fi
 if [ -n "${GDD_TARGET_REPO:-}" ]; then
   printf 'components:\n  %s:\n    repo: %s\n' "$GDD_TARGET" "$GDD_TARGET_REPO" \
     > "$WS/ecosystem.local.yaml"
+  # `ws cr` fills @HUMAN_ACCOUNT in the request body from this. Unset, the person
+  # reviewing gets a pull request addressed to a placeholder — a small blemish on
+  # exactly the artifact a non-technical owner is meant to read and trust.
+  # It is the human REVIEWER, not the sandbox's own account.
+  if [ -n "${GDD_REVIEW_ACCOUNT:-}" ]; then
+    printf 'identity:\n  human_account: %s\n' "$GDD_REVIEW_ACCOUNT" \
+      >> "$WS/ecosystem.local.yaml"
+  fi
   echo "provision: declared $GDD_TARGET in ecosystem.local.yaml"
 fi
 

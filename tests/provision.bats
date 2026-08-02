@@ -10,7 +10,8 @@ setup() {
   # Start from a known state: tests that want a token or a channel export their
   # own. Without this, a value set by an earlier test decides a later one's
   # outcome, which is how a passing suite hides a broken assertion.
-  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS
+  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS \
+        GDD_REVIEW_ACCOUNT
   make_stub git 'exit 0'
   make_stub ws 'exit 0'
   make_stub claude 'exit 0'
@@ -82,6 +83,15 @@ setup() {
   run cat "$GDD_WORKSPACE/ecosystem.local.yaml"
   [[ "$output" == *"ken-site:"* ]]
   [[ "$output" == *"https://example/ken-site.git"* ]]
+}
+
+@test "provision records the human reviewer when one is configured" {
+  # `ws cr` fills the request body from this; unset, the reviewer receives a pull
+  # request addressed to a placeholder.
+  export GDD_REVIEW_ACCOUNT="Cervator"
+  bash provision/provision.sh
+  run cat "$GDD_WORKSPACE/ecosystem.local.yaml"
+  [[ "$output" == *"human_account: Cervator"* ]]
 }
 
 @test "provision renders the briefing with the target substituted" {
