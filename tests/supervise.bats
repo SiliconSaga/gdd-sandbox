@@ -72,6 +72,31 @@ setup() {
   [[ "$output" == *"sudo"* ]]
 }
 
+@test "a waiting prompt is recognised, spaced or mashed together" {
+  # Observed live: a workspace hook asked to confirm a shell command and the
+  # session sat blocked for ten minutes — process alive, channel connected, health
+  # check green, and the person waiting got silence. Stripping control codes joins
+  # words together, so detection must not assume the spaces survive.
+  . bin/lib.sh
+  run ws_prompt_pending "Do you want to proceed?"
+  [ "$status" -eq 0 ]
+  run ws_prompt_pending "Doyouwanttoproceed?"
+  [ "$status" -eq 0 ]
+  run ws_prompt_pending " 1. Yes"
+  [ "$status" -eq 0 ]
+  run ws_prompt_pending "1.Yes"
+  [ "$status" -eq 0 ]
+}
+
+@test "ordinary session output is not mistaken for a prompt" {
+  # Cancelling on a false positive would throw away work the agent was doing.
+  . bin/lib.sh
+  run ws_prompt_pending "I've created the file and sent you a preview."
+  [ "$status" -ne 0 ]
+  run ws_prompt_pending "Do you want me to publish it? (asked in chat)"
+  [ "$status" -ne 0 ]
+}
+
 @test "the channel watchdog ends the session when its server disappears" {
   # The agent does not exit when its channel dies, so nothing would notice.
   export GDD_CHANNEL_GRACE=0 GDD_CHANNEL_POLL=0

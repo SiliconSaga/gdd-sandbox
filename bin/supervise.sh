@@ -37,6 +37,10 @@ DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh r
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
 CHANNEL_POLL="${GDD_CHANNEL_POLL:-30}"
+PROMPT_POLL="${GDD_PROMPT_POLL:-45}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=bin/lib.sh
+. "$HERE/lib.sh"
 # Point the session at its briefing. Kept to a single line with no quotes: it is
 # embedded in the `script -c` command string, where newlines and quoting break.
 # The substance lives in the briefing file, which is versioned and testable.
@@ -50,6 +54,41 @@ FIFO=/tmp/claude-stdin
 # its channel dies — observed after a host reboot: agent alive, MCP server absent,
 # bot offline, every message silently unanswered while Docker reported healthy.
 # Ending the session hands recovery to the supervisor loop, which relaunches.
+# Decline prompts nobody can answer.
+#
+# A headless session has no human at its terminal, so any interactive prompt hangs
+# it forever: the process stays alive, the channel stays connected, the health
+# check stays green, and the person waiting gets silence. Observed for real — a
+# workspace hook asked to confirm a shell command and the session sat blocked for
+# ten minutes with no sign of trouble anywhere.
+#
+# So the floor flips from ask to deny. Cancelling loses one tool call and the agent
+# adapts or explains; waiting loses the conversation with no explanation at all.
+# Prompts that genuinely need a person belong in chat as an outcome question, not
+# as a tool confirmation.
+#
+# Requires the prompt to persist across two polls, so a prompt being answered by
+# some other path is not cancelled out from under it.
+watch_prompts() {
+  local last="" now=""
+  sleep "$CHANNEL_GRACE"
+  while pgrep -f 'claude .*--channels' >/dev/null; do
+    now="$(bash "$HERE/session-log.sh" 6 "$TTY_LOG" 2>/dev/null || true)"
+    if ws_prompt_pending "$now"; then
+      if [ -n "$last" ] && [ "$now" = "$last" ]; then
+        echo "supervise: declining a prompt with no human to answer it" >&2
+        printf '\033' > "$FIFO"     # Esc cancels, whatever the prompt's shape
+        last=""
+      else
+        last="$now"
+      fi
+    else
+      last=""
+    fi
+    sleep "$PROMPT_POLL"
+  done
+}
+
 watch_channel() {
   sleep "$CHANNEL_GRACE"
   while pgrep -f 'claude .*--channels' >/dev/null; do
@@ -70,13 +109,15 @@ launch() {
   local w=$!
   watch_channel &
   local watcher=$!
+  watch_prompts &
+  local prompt_watcher=$!
   # -e so script returns the child's exit status; without it a failed session
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
     "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
-  kill "$w" "$watcher" 2>/dev/null || true
+  kill "$w" "$watcher" "$prompt_watcher" 2>/dev/null || true
   return "$rc"
 }
 

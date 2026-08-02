@@ -110,6 +110,18 @@ account. Wiring liveness into an observability stack is a later addition.
 
 ## Reading the session log — and what not to trust
 
+**Read it through `bin/session-log.sh`, never raw:**
+
+```bash
+ws docker exec <name> bash /opt/gdd-sandbox/bin/session-log.sh 60
+```
+
+The raw file is a screen recording. Control codes land mid-word, so searching it
+for text you can see on screen returns nothing — a false negative that reads as
+"that never happened". A ten-minute hang went undiagnosed behind exactly that:
+grepping for the prompt on screen found zero matches. The reader strips the codes
+and drops spinner frames, which is the difference between unusable and obvious.
+
 `/tmp/channels-tty.log` is a raw terminal capture, not a transcript. It is the
 right tool for diagnosing the *session* — did it launch, with which flags, did it
 crash, did the supervisor relaunch it. It is a poor and actively misleading source

@@ -32,6 +32,15 @@ ws_host_path() {
 # arguments are visible to anyone who can list processes.
 WS_RUNTIME_SECRETS='CLAUDE_CODE_OAUTH_TOKEN|DISCORD_BOT_TOKEN|GDD_GITHUB_TOKEN'
 
+# Does this session output show a prompt waiting on a human?
+#
+# Matched against control-code-stripped text, where removing escape sequences
+# joins fragments together ("Doyouwanttoproceed?"), so the pattern tolerates
+# missing spaces rather than assuming them.
+ws_prompt_pending() {
+    printf '%s' "$1" | grep -qE 'want.{0,3}to.{0,3}proceed|1\..{0,2}Yes'
+}
+
 # Read one value out of an operator .env, literally.
 #
 # Accepts the optional `export ` prefix that `ws` allows, strips surrounding
