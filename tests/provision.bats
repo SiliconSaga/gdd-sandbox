@@ -7,6 +7,10 @@ setup() {
   export GDD_TARGET="ken-site" GDD_TARGET_REPO="https://example/ken-site.git"
   export GDD_ALLOWFROM='["123"]'
   export GDD_SEED="$BATS_TEST_TMPDIR/seed"; mkdir -p "$GDD_SEED/.git"
+  # Start from a known state: tests that want a token or a channel export their
+  # own. Without this, a value set by an earlier test decides a later one's
+  # outcome, which is how a passing suite hides a broken assertion.
+  unset GDD_GITHUB_TOKEN GDD_GITHUB_USER GDD_GITHUB_EMAIL GDD_CHANNEL_GROUPS
   make_stub git 'exit 0'
   make_stub ws 'exit 0'
   make_stub claude 'exit 0'

@@ -69,6 +69,25 @@ setup() {
   [[ "$output" == *'requireMention":false'* ]]
 }
 
+@test "run.sh reads the commit identity from the same file as the token" {
+  # One place to configure: the operator should not also have to export shell
+  # variables for the identity that sits beside the token.
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\nexport GDD_GITHUB_USER=Kencierge\nGDD_GITHUB_EMAIL="311+Kencierge@users.noreply.github.com"\n' \
+    > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" == *"GDD_GITHUB_USER=Kencierge"* ]]
+  # Quotes stripped, export prefix tolerated.
+  [[ "$output" == *"GDD_GITHUB_EMAIL=311+Kencierge@users.noreply.github.com"* ]]
+}
+
+@test "run.sh falls back to a sane identity when none is configured" {
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" == *"GDD_GITHUB_USER=Kencierge"* ]]
+}
+
 @test "run.sh does not start the supervisor via docker exec" {
   # Regression guard: a supervisor started with `docker exec -d` dies with the
   # container, so the restart policy brings back a container with no agent

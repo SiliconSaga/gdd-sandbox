@@ -44,9 +44,9 @@ if [ -n "${GDD_GITHUB_TOKEN:-}" ]; then
   chmod 600 "$ws_env" 2>/dev/null || true
   echo "provision: workspace GitHub token installed (value not logged)"
 
-  git -C "$WS/components/$GDD_TARGET" config user.name "${GDD_GIT_AUTHOR_NAME:-Kencierge}" 2>/dev/null || true
+  git -C "$WS/components/$GDD_TARGET" config user.name "${GDD_GITHUB_USER:-Kencierge}" 2>/dev/null || true
   git -C "$WS/components/$GDD_TARGET" config user.email \
-    "${GDD_GIT_AUTHOR_EMAIL:-kencierge@users.noreply.github.com}" 2>/dev/null || true
+    "${GDD_GITHUB_EMAIL:-kencierge@users.noreply.github.com}" 2>/dev/null || true
 else
   echo "provision: no GitHub token supplied — the agent can draft but not publish"
 fi

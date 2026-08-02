@@ -10,10 +10,6 @@ WS_ROOT="$(cd "$ROOT/../.." && pwd)"
 IMAGE="${GDD_SANDBOX_IMAGE:-gdd-sandbox:latest}"
 TARGET="" NAME="" SECRETS="$WS_ROOT/.env" TARGET_REPO="" REALM_REPO="" ALLOWFROM="[]"
 CHANNEL="" REQUIRE_MENTION="true"
-# Commits are attributed to the sandbox's own machine account, so agent-authored
-# history is honest about who wrote it.
-GIT_AUTHOR_NAME="${GDD_GIT_AUTHOR_NAME:-Kencierge}"
-GIT_AUTHOR_EMAIL="${GDD_GIT_AUTHOR_EMAIL:-kencierge@users.noreply.github.com}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) TARGET="$2"; shift 2 ;;
@@ -35,6 +31,14 @@ if [ -f "$SECRETS" ] && grep -q '^ANTHROPIC_API_KEY=' "$SECRETS"; then
   echo "error: $SECRETS sets ANTHROPIC_API_KEY — remove it (outranks the OAuth token)" >&2
   exit 2
 fi
+# Commit identity for the sandbox's own machine account, read from the same file
+# as its token so there is one place to configure. GitHub links commits by email,
+# so use that account's noreply address if you want the history to attribute.
+GITHUB_USER="$(ws_env_value "$SECRETS" GDD_GITHUB_USER)"
+GITHUB_EMAIL="$(ws_env_value "$SECRETS" GDD_GITHUB_EMAIL)"
+GITHUB_USER="${GITHUB_USER:-Kencierge}"
+GITHUB_EMAIL="${GITHUB_EMAIL:-kencierge@users.noreply.github.com}"
+
 # Resolve the target repo from ecosystem if not given.
 [ -n "$TARGET_REPO" ] || TARGET_REPO="$(yq ".components.$TARGET.repo" "$WS_ROOT/ecosystem.local.yaml")"
 
@@ -73,7 +77,7 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   -e "GDD_TARGET=$TARGET" -e "GDD_TARGET_REPO=$TARGET_REPO" \
   -e "GDD_REALM_REPO=$REALM_REPO" -e "GDD_ALLOWFROM=$ALLOWFROM" \
   -e "GDD_CHANNEL_GROUPS=$CHANNEL_GROUPS" \
-  -e "GDD_GIT_AUTHOR_NAME=$GIT_AUTHOR_NAME" -e "GDD_GIT_AUTHOR_EMAIL=$GIT_AUTHOR_EMAIL" \
+  -e "GDD_GITHUB_USER=$GITHUB_USER" -e "GDD_GITHUB_EMAIL=$GITHUB_EMAIL" \
   -e "GDD_WORKSPACE=/work/ws" \
   -v "$VOL:/work/ws" \
   -v "$VOL-claude:/root/.claude" \

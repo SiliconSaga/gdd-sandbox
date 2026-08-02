@@ -32,6 +32,23 @@ ws_host_path() {
 # arguments are visible to anyone who can list processes.
 WS_RUNTIME_SECRETS='CLAUDE_CODE_OAUTH_TOKEN|DISCORD_BOT_TOKEN|GDD_GITHUB_TOKEN'
 
+# Read one value out of an operator .env, literally.
+#
+# Accepts the optional `export ` prefix that `ws` allows, strips surrounding
+# quotes, and never evaluates the line — a .env is data here, not a script.
+# Used for the non-secret identity settings that sit alongside the token, so the
+# operator configures everything in one file instead of exporting shell variables.
+ws_env_value() {
+    local file="$1" key="$2" line
+    [ -f "$file" ] || return 0
+    line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file" | tail -n1)" || true
+    [ -n "$line" ] || return 0
+    line="${line#*=}"
+    line="${line%\"}"; line="${line#\"}"
+    line="${line%\'}"; line="${line#\'}"
+    printf '%s\n' "$line"
+}
+
 # Write a minimal env file for `docker --env-file` from an operator .env.
 #
 # Two transforms: keep only the allowlisted runtime secrets, and strip any
