@@ -35,11 +35,16 @@ fi
 if [ -n "${GDD_TARGET_REPO:-}" ]; then
   printf 'components:\n  %s:\n    repo: %s\n' "$GDD_TARGET" "$GDD_TARGET_REPO" \
     > "$WS/ecosystem.local.yaml"
-  # No identity.human_account on purpose. `ws diagnose` warns that it is unset,
-  # and here that warning does not apply: it exists to fill @HUMAN_ACCOUNT in the
-  # request body, and the sandbox's template has no such placeholder — provenance
-  # comes from the chat identity instead. Anyone with review rights can review;
-  # nobody needs mentioning, least of all a name we would have to invent.
+  # identity.human_account is tooling plumbing, not a notification preference.
+  # It was left unset once, on the reasoning that nobody needs pinging and the
+  # sandbox template has no @HUMAN_ACCOUNT placeholder. Both true — and it still
+  # blocked the agent, which stopped mid-task to ask what the value should be
+  # rather than guess a GitHub handle that might belong to a stranger. Correct of
+  # it, and entirely avoidable: set the field so the question never arises.
+  if [ -n "${GDD_HUMAN_ACCOUNT:-}" ]; then
+    printf 'identity:\n  human_account: %s\n' "$GDD_HUMAN_ACCOUNT" \
+      >> "$WS/ecosystem.local.yaml"
+  fi
   echo "provision: declared $GDD_TARGET in ecosystem.local.yaml"
 fi
 
@@ -135,8 +140,24 @@ fi
 # instance that happens to receive chat messages: asked to change the project it
 # will compose a plausible reply and touch nothing, because nothing told it what
 # it is, what it is scoped to, or that chat requests mean real work.
-sed "s/__TARGET__/${GDD_TARGET:-unknown}/g" "$HERE/BRIEFING.md" \
-  > "${GDD_BRIEFING_PATH:-/tmp/gdd-sandbox-briefing.md}"
+briefing_path="${GDD_BRIEFING_PATH:-/tmp/gdd-sandbox-briefing.md}"
+# The operator's direct-message address is where technical detail goes when the
+# agent is blocked. Nobody watches a dashboard for this sandbox, so that message is
+# the alert — without it the first sign of trouble is someone wondering why
+# nothing happened.
+sed -e "s/__TARGET__/${GDD_TARGET:-unknown}/g" \
+    -e "s|__OPERATOR_CHAT__|${GDD_OPERATOR_CHAT:-(none configured)}|g" \
+    "$HERE/BRIEFING.md" > "$briefing_path"
+
+# Whatever the operator wants to add for THIS deployment: what the site is, who
+# the audience is, house style, anything the shipped briefing cannot know. The
+# baked text stays agnostic; this is where a particular sandbox gets its stage set,
+# and it needs no rebuild to change.
+if [ -n "${GDD_BRIEFING_EXTRA:-}" ]; then
+  printf '\n## About this particular sandbox\n\n%s\n' "$GDD_BRIEFING_EXTRA" \
+    >> "$briefing_path"
+  echo "provision: appended the operator's briefing notes"
+fi
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"
 
 # 5. Report whether the upstream quirks we work around still look the same.

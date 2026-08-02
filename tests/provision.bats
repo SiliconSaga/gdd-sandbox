@@ -115,6 +115,38 @@ setup() {
   [[ "$output" != *"@[chat display name]"* ]]
 }
 
+@test "provision tells the agent where to send technical detail" {
+  # That direct message is the only alert this sandbox has — nobody is watching a
+  # dashboard, so losing it means the first sign of trouble is a person waiting.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  export GDD_OPERATOR_CHAT="1528091545549406271"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"1528091545549406271"* ]]
+  [[ "$output" != *"__OPERATOR_CHAT__"* ]]
+}
+
+@test "provision says plainly when no operator address is configured" {
+  # An unfilled placeholder would read as an address and send the alert nowhere.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"none configured"* ]]
+  [[ "$output" != *"__OPERATOR_CHAT__"* ]]
+}
+
+@test "provision appends the operator's own briefing notes" {
+  # The shipped briefing cannot know what this site is or who reads it; the
+  # operator sets that stage without needing a rebuild.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  export GDD_BRIEFING_EXTRA="The site belongs to a local election candidate. Keep the tone plain."
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"local election candidate"* ]]
+  # ...after the shipped content, not instead of it.
+  [[ "$output" == *"components/ken-site"* ]]
+}
+
 @test "provision renders the briefing with the target substituted" {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh

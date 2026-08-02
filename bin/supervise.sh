@@ -37,7 +37,11 @@ DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh r
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
 CHANNEL_POLL="${GDD_CHANNEL_POLL:-30}"
-PROMPT_POLL="${GDD_PROMPT_POLL:-45}"
+# Long enough that a reachable operator can actually answer. The channel relays
+# prompts as buttons, so declining after ninety seconds would cancel decisions a
+# human was in the middle of making — the watchdog is for when nobody will answer,
+# not for beating someone to the reply. Two polls, so roughly five minutes.
+PROMPT_POLL="${GDD_PROMPT_POLL:-150}"
 # Auto mode classifies each action instead of asking a human who is not there. Its
 # shipped rules already reason about the threats that matter here — exfiltration,
 # credential exploration, straying outside the repository, irreversible local

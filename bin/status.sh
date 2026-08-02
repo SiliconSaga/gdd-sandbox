@@ -12,16 +12,35 @@ TARGET="${GDD_TARGET:-}"
 # shellcheck source=bin/lib.sh
 . "$HERE/lib.sh"
 
+MIN_UPTIME="${GDD_HEALTH_MIN_UPTIME:-30}"
+
 echo "== processes =="
-pgrep -af 'claude .*--channels' || echo "  session: ABSENT"
-pgrep -af 'claude-plugins-official/discord' || echo "  channel server: ABSENT — bot is offline"
+# Just identity and age: the full command line is three screens of flags and
+# buries everything below it.
+session_pid="$(pgrep -f 'claude .*--channels' | head -n1)"
+if [ -n "$session_pid" ]; then
+  echo "  session: pid $session_pid, up $(ps -o etimes= -p "$session_pid" | tr -d ' ')s"
+else
+  echo "  session: ABSENT"
+fi
+channel_pid="$(pgrep -f 'claude-plugins-official/discord' | head -n1)"
+if [ -n "$channel_pid" ]; then
+  echo "  channel server: pid $channel_pid"
+else
+  echo "  channel server: ABSENT — the bot is offline"
+fi
 
 echo
 echo "== reachable? =="
 if bash "$HERE/healthcheck.sh"; then
   echo "  healthy: session up, channel present, chat service reachable"
+elif [ -n "$session_pid" ] \
+  && [ "$(ps -o etimes= -p "$session_pid" | tr -d ' ')" -lt "$MIN_UPTIME" ]; then
+  # Distinguish "still starting" from "broken": reporting a fresh sandbox as
+  # unhealthy sends you hunting for a fault that is just a clock.
+  echo "  starting — inside the ${MIN_UPTIME}s settling window, not yet a verdict"
 else
-  echo "  UNHEALTHY — see above for which of the three failed"
+  echo "  UNHEALTHY — session, channel server, or reachability; see above"
 fi
 
 echo

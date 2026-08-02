@@ -38,6 +38,15 @@ GITHUB_USER="$(ws_env_value "$SECRETS" GDD_GITHUB_USER)"
 GITHUB_EMAIL="$(ws_env_value "$SECRETS" GDD_GITHUB_EMAIL)"
 GITHUB_USER="${GITHUB_USER:-Kencierge}"
 GITHUB_EMAIL="${GITHUB_EMAIL:-kencierge@users.noreply.github.com}"
+# Operator stage-setting for this deployment, appended to the shipped briefing.
+BRIEFING_EXTRA="$(ws_env_value "$SECRETS" GDD_BRIEFING_EXTRA)"
+# Where the agent sends technical detail when it is blocked — the operator's own
+# chat, not the channel the request came from.
+OPERATOR_CHAT="$(ws_env_value "$SECRETS" GDD_OPERATOR_CHAT)"
+# The site owner's account on the code host. Plumbing that `ws cr` expects — unset,
+# the agent stops to ask rather than risk tagging a stranger who happens to share
+# a chat handle.
+HUMAN_ACCOUNT="$(ws_env_value "$SECRETS" GDD_HUMAN_ACCOUNT)"
 
 # Resolve the target repo from ecosystem if not given.
 [ -n "$TARGET_REPO" ] || TARGET_REPO="$(yq ".components.$TARGET.repo" "$WS_ROOT/ecosystem.local.yaml")"
@@ -78,6 +87,8 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   -e "GDD_REALM_REPO=$REALM_REPO" -e "GDD_ALLOWFROM=$ALLOWFROM" \
   -e "GDD_CHANNEL_GROUPS=$CHANNEL_GROUPS" \
   -e "GDD_GITHUB_USER=$GITHUB_USER" -e "GDD_GITHUB_EMAIL=$GITHUB_EMAIL" \
+  -e "GDD_BRIEFING_EXTRA=$BRIEFING_EXTRA" -e "GDD_OPERATOR_CHAT=$OPERATOR_CHAT" \
+  -e "GDD_HUMAN_ACCOUNT=$HUMAN_ACCOUNT" \
   -e "GDD_WORKSPACE=/work/ws" \
   -v "$VOL:/work/ws" \
   -v "$VOL-claude:/root/.claude" \
