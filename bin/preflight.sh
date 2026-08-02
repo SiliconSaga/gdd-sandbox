@@ -72,7 +72,12 @@ if ! grep -q '^GH_TOKEN=' "$WS/.env" 2>/dev/null; then
   note degraded "No code-host token: the agent can draft but cannot open a pull request." \
     "Set GDD_GITHUB_TOKEN in the operator env file."
 else
-  who="$(cd "$WS/components/$TARGET" 2>/dev/null && gh api user --jq .login 2>/dev/null || true)"
+  # Pass the token explicitly. It lives in the workspace .env, which `ws` loads
+  # and a bare `gh` does not — checking without it reports a perfectly good token
+  # as broken, and a check that cries wolf is worse than no check at all.
+  tok="$(grep -m1 '^GH_TOKEN=' "$WS/.env" 2>/dev/null || true)"
+  tok="${tok#GH_TOKEN=}"
+  who="$(GH_TOKEN="$tok" gh api user --jq .login 2>/dev/null || true)"
   if [ -z "$who" ]; then
     note degraded "The token is present but does not authenticate." \
       "Check it has not expired and is scoped to this repository."

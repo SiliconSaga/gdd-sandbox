@@ -39,6 +39,23 @@ setup() {
   [[ "$output" == *"not declared"* ]]
 }
 
+@test "a working token is not reported as broken" {
+  # The token lives in the workspace .env, which `ws` loads and a bare `gh` does
+  # not. Checking without passing it explicitly reports a good token as broken —
+  # observed live, and a check that cries wolf is worse than no check.
+  make_stub gh 'case "${GH_TOKEN:-}" in "") exit 1 ;; *) echo Kencierge ;; esac'
+  run bash bin/preflight.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"does not authenticate"* ]]
+}
+
+@test "a token that really fails is still reported" {
+  make_stub gh 'exit 1'
+  run bash bin/preflight.sh
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"does not authenticate"* ]]
+}
+
 @test "a missing token degrades rather than blocks" {
   # Drafting is still useful; refusing to start would turn partial capability
   # into silence.
