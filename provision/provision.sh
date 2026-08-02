@@ -163,4 +163,9 @@ bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"
 # 5. Report whether the upstream quirks we work around still look the same.
 bash "$HERE/../bin/check-plugin-quirks.sh" || true
 
+# 6. Check the sandbox can actually do its job, and leave a report the agent
+# reads. Never fatal: a sandbox that can draft is still useful, and refusing to
+# start would turn a partial capability into silence.
+bash "$HERE/../bin/preflight.sh" || true
+
 echo "provision complete: $WS (target=$GDD_TARGET)"

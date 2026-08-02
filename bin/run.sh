@@ -47,6 +47,9 @@ OPERATOR_CHAT="$(ws_env_value "$SECRETS" GDD_OPERATOR_CHAT)"
 # the agent stops to ask rather than risk tagging a stranger who happens to share
 # a chat handle.
 HUMAN_ACCOUNT="$(ws_env_value "$SECRETS" GDD_HUMAN_ACCOUNT)"
+# Set to 1 when the machine account's public email is a deliberate choice, so
+# preflight stops advising about it.
+PUBLIC_EMAIL_OK="$(ws_env_value "$SECRETS" GDD_PUBLIC_EMAIL_OK)"
 
 # Resolve the target repo from ecosystem if not given.
 [ -n "$TARGET_REPO" ] || TARGET_REPO="$(yq ".components.$TARGET.repo" "$WS_ROOT/ecosystem.local.yaml")"
@@ -88,7 +91,7 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   -e "GDD_CHANNEL_GROUPS=$CHANNEL_GROUPS" \
   -e "GDD_GITHUB_USER=$GITHUB_USER" -e "GDD_GITHUB_EMAIL=$GITHUB_EMAIL" \
   -e "GDD_BRIEFING_EXTRA=$BRIEFING_EXTRA" -e "GDD_OPERATOR_CHAT=$OPERATOR_CHAT" \
-  -e "GDD_HUMAN_ACCOUNT=$HUMAN_ACCOUNT" \
+  -e "GDD_HUMAN_ACCOUNT=$HUMAN_ACCOUNT" -e "GDD_PUBLIC_EMAIL_OK=$PUBLIC_EMAIL_OK" \
   -e "GDD_WORKSPACE=/work/ws" \
   -v "$VOL:/work/ws" \
   -v "$VOL-claude:/root/.claude" \

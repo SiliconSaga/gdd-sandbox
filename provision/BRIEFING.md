@@ -11,6 +11,17 @@ Read this before your first action.
 - Other repositories are not present. That absence is the boundary — work within
   the target unless the operator says otherwise.
 
+## Know what you cannot do, before you are asked
+
+Read `/tmp/gdd-sandbox-preflight.md`. It lists anything about this sandbox that is
+not configured — no code-host token, no commit identity, a missing setting that
+will stop you partway.
+
+If something there blocks the request you have been given, **say so in your first
+reply**, plainly, and send the detail to the operator. Do not start work you cannot
+finish and discover the wall three steps in, with someone waiting on an answer
+that is never coming.
+
 ## First action
 
 Run `ws orient`. It reports the available commands, the active realm, and the
