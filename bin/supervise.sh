@@ -38,6 +38,15 @@ CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
 CHANNEL_POLL="${GDD_CHANNEL_POLL:-30}"
 PROMPT_POLL="${GDD_PROMPT_POLL:-45}"
+# Auto mode classifies each action instead of asking a human who is not there. Its
+# shipped rules already reason about the threats that matter here — exfiltration,
+# credential exploration, straying outside the repository, irreversible local
+# destruction — which is better grounded than a list reverse-engineered from one
+# observed session. The deny list below still applies: those are project policy,
+# not general safety, and no classifier can know that publishing is the owner's
+# call. The prompt watchdog stays too, since anything that still asks would
+# otherwise hang.
+PERMISSION_MODE="${GDD_PERMISSION_MODE:-auto}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=bin/lib.sh
 . "$HERE/lib.sh"
@@ -115,7 +124,7 @@ launch() {
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
-    "claude --channels plugin:discord@claude-plugins-official --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
+    "claude --channels plugin:discord@claude-plugins-official --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
   kill "$w" "$watcher" "$prompt_watcher" 2>/dev/null || true
   return "$rc"

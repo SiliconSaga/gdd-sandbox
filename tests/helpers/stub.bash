@@ -13,8 +13,11 @@ EOF
 }
 
 stub_setup() {
-  STUB_BIN="$BATS_TEST_TMPDIR/bin"
-  STUB_LOG="$BATS_TEST_TMPDIR/calls.log"
+  # Exported so a stub body referring to $STUB_LOG works in the child shell.
+  # Unexported, every such stub emitted a redirection error on each call — noise
+  # that buried the real message when a test failed for an unrelated reason.
+  export STUB_BIN="$BATS_TEST_TMPDIR/bin"
+  export STUB_LOG="$BATS_TEST_TMPDIR/calls.log"
   : > "$STUB_LOG"
   mkdir -p "$STUB_BIN"
   PATH="$STUB_BIN:$PATH"

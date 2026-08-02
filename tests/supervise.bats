@@ -5,8 +5,9 @@ setup() {
   export GDD_WORKSPACE="$BATS_TEST_TMPDIR/ws"; mkdir -p "$GDD_WORKSPACE"
   export ROTATE_FLAG="$BATS_TEST_TMPDIR/rotate"
   export SUPERVISE_ONCE=1
-  # 'script' is the PTY wrapper; stub it to just log the claude command it was given.
-  make_stub script 'echo "$*" >> "$STUB_LOG"'
+  # 'script' is the PTY wrapper. make_stub already records the argv, so the body
+  # stays empty — logging it again would double every count the tests assert on.
+  make_stub script
   make_stub ws 'exit 0'
 }
 
@@ -22,6 +23,19 @@ setup() {
   # The primer is embedded in a `script -c` string: newlines would break it.
   run bash -c "grep -c '' \"$STUB_LOG\""
   [ "$output" = "1" ]
+}
+
+@test "launch classifies actions rather than asking an absent human" {
+  # Auto mode's shipped rules cover exfiltration, credential exploration and
+  # straying outside the repository — better grounded than a list reverse-
+  # engineered from one session. It does not replace the project-policy denies.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  # Quoted in the launch string, so match the flag and value separately.
+  [[ "$output" == *"--permission-mode"* ]]
+  [[ "$output" == *"auto"* ]]
+  [[ "$output" == *"--disallowedTools"* ]]
+  [[ "$output" != *"bypassPermissions"* ]]
 }
 
 @test "launch pre-allows the chat and routine work tools" {
@@ -104,7 +118,7 @@ setup() {
   make_stub pgrep 'case "$*" in *claude-plugins-official/discord*) exit 1 ;; *) echo 1234 ;; esac'
   make_stub pkill 'echo "pkill $*" >> "$STUB_LOG"'
   # Keep the session "running" long enough for the watchdog to act.
-  make_stub script 'echo "$*" >> "$STUB_LOG"; sleep 1'
+  make_stub script 'sleep 1'
   run bash bin/supervise.sh
   [[ "$output" == *"channel server gone"* ]]
   grep -q "pkill" "$STUB_LOG"
@@ -116,7 +130,7 @@ setup() {
   # forever is a crash loop Docker reports as healthy.
   touch "$GDD_WORKSPACE/.gdd-sandbox-launched"
   # Fail only the --continue attempt; succeed when launched fresh.
-  make_stub script 'echo "$*" >> "$STUB_LOG"; case "$*" in *--continue*) exit 1 ;; esac'
+  make_stub script 'case "$*" in *--continue*) exit 1 ;; esac'
   run bash bin/supervise.sh
   [[ "$output" == *"--continue failed"* ]]
   run grep -c -- "--continue" "$STUB_LOG"
