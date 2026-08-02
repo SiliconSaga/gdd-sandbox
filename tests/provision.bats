@@ -74,6 +74,16 @@ setup() {
   [[ "$output" != *"operator_personal"* ]]
 }
 
+@test "provision declares the target so ws can resolve it" {
+  # Cloning into components/ is not enough — `ws push` and `ws cr` resolve a
+  # component from the config, and without this they fail with "no such target"
+  # while the clone looks perfectly fine.
+  bash provision/provision.sh
+  run cat "$GDD_WORKSPACE/ecosystem.local.yaml"
+  [[ "$output" == *"ken-site:"* ]]
+  [[ "$output" == *"https://example/ken-site.git"* ]]
+}
+
 @test "provision renders the briefing with the target substituted" {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh

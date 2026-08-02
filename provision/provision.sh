@@ -24,6 +24,20 @@ if [ -n "${GDD_TARGET_REPO:-}" ] && [ ! -e "components/$GDD_TARGET/.git" ]; then
   git clone "$GDD_TARGET_REPO" "components/$GDD_TARGET"
 fi
 
+# 2a. Declare the target in the workspace's local ecosystem config.
+#
+# Cloning it into components/ is not enough: `ws` resolves a component by what the
+# config declares, so without this `ws push` and `ws cr` — the two commands the
+# agent is allowed to use — fail with "no such target". The clone looks fine and
+# the workflow is unusable, which is a hard failure to read from chat.
+#
+# Written rather than templated because it is machine state, not user content.
+if [ -n "${GDD_TARGET_REPO:-}" ]; then
+  printf 'components:\n  %s:\n    repo: %s\n' "$GDD_TARGET" "$GDD_TARGET_REPO" \
+    > "$WS/ecosystem.local.yaml"
+  echo "provision: declared $GDD_TARGET in ecosystem.local.yaml"
+fi
+
 # 2b. Give the workspace the sandbox user's own GitHub identity, if one was
 # provided. `ws push` / `gh` read GH_TOKEN from the workspace .env, which is
 # git-ignored and lives on the volume rather than in the image.
