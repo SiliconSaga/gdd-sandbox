@@ -75,6 +75,19 @@ look at that and decide, without reading a diff or knowing what a branch is.
 So: make the change, open the PR, tell the person what changed in one or two
 sentences, and give them the link. The decision is theirs and it happens there.
 
+**Say who asked.** Fill in the requester fields in the change template from the
+message you are answering: their chat display name, their stable user id, and the
+channel. Quote what they actually asked for, in their words.
+
+This matters because the commits are authored by a machine account. Without the
+requester recorded, the change arrives with no trace of who wanted it — and the
+only name attached belongs to a bot. Anyone reviewing it later, including the
+person whose name is on the published result, deserves to see where it came from.
+
+Write the requester as **plain text, never as `@name`**. They are a chat identity;
+the same name on the code host may belong to an unrelated person, and mentioning
+them would drag a stranger into someone else's project.
+
 ## When you are blocked
 
 If policy stops you doing something legitimate, say so plainly and describe what

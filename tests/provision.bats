@@ -94,6 +94,28 @@ setup() {
   [[ "$output" == *"human_account: Cervator"* ]]
 }
 
+@test "provision installs the chat-provenance change template" {
+  # The stock disclaimer credits a GitHub user driving the agent locally, which is
+  # not what happened here — and would leave the machine account as the only name.
+  mkdir -p "$GDD_WORKSPACE/templates"
+  printf 'driven by @HUMAN_ACCOUNT\n' > "$GDD_WORKSPACE/templates/change.md"
+  export GDD_GITHUB_USER="Kencierge"
+  bash provision/provision.sh
+  run cat "$GDD_WORKSPACE/templates/change.md"
+  [[ "$output" == *"requested over chat"* ]]
+  [[ "$output" == *"Kencierge"* ]]
+  [[ "$output" != *"@HUMAN_ACCOUNT"* ]]
+  [[ "$output" != *"__GITHUB_USER__"* ]]
+}
+
+@test "the provenance template never mentions the requester as a code-host user" {
+  # `@name` would notify whoever owns that handle on the code host — possibly a
+  # stranger with no connection to this project.
+  run cat provision/change.sandbox.md
+  [[ "$output" == *"not a GitHub user"* ]]
+  [[ "$output" != *"@[chat display name]"* ]]
+}
+
 @test "provision renders the briefing with the target substituted" {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh

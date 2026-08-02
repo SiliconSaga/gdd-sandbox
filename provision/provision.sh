@@ -121,6 +121,19 @@ sed -e "s/__ALLOWFROM__/$ALLOWFROM/" -e "s|__GROUPS__|$CHANNEL_GROUPS|" \
   "$HERE/access.json.template" \
   > "$HOME/.claude/channels/discord/access.json"
 
+# Install the sandbox's change-request template over the workspace default.
+#
+# The stock disclaimer reads "filed by agent driven by @HUMAN_ACCOUNT", which
+# assumes the person driving the agent is a GitHub user working locally. Here they
+# are a chat identity who may have no GitHub account at all, so a request would
+# otherwise arrive claiming provenance it does not have — and the only name on it
+# would be the machine account, which says nothing about who asked.
+if [ -f "$HERE/change.sandbox.md" ] && [ -d "$WS/templates" ]; then
+  sed "s/__GITHUB_USER__/${GDD_GITHUB_USER:-Kencierge}/g" "$HERE/change.sandbox.md" \
+    > "$WS/templates/change.md"
+  echo "provision: installed the chat-provenance change template"
+fi
+
 # Render the agent briefing. Without it the session is a bare Claude Code
 # instance that happens to receive chat messages: asked to change the project it
 # will compose a plausible reply and touch nothing, because nothing told it what
