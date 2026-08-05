@@ -77,8 +77,10 @@ else
   # as broken, and a check that cries wolf is worse than no check at all.
   tok="$(grep -m1 '^GH_TOKEN=' "$WS/.env" 2>/dev/null || true)"
   tok="${tok#GH_TOKEN=}"
-  who="$(GH_TOKEN="$tok" gh api user --jq .login 2>/dev/null || true)"
-  if [ -z "$who" ]; then
+  # Judge by exit status, not by whether anything was printed: the tool writes its
+  # error body to stdout, so a rejected token still produces output and an
+  # is-it-empty check reads the refusal as success.
+  if ! GH_TOKEN="$tok" gh api user --jq .login >/dev/null 2>&1; then
     note degraded "The token is present but does not authenticate." \
       "Check it has not expired and is scoped to this repository."
   fi

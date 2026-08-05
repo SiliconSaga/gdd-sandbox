@@ -49,8 +49,11 @@ setup() {
   [[ "$output" != *"does not authenticate"* ]]
 }
 
-@test "a token that really fails is still reported" {
-  make_stub gh 'exit 1'
+@test "a rejected token is reported even though it prints an error body" {
+  # The real tool writes its refusal to stdout and exits non-zero. A stub that
+  # merely exits silently is more polite than reality, and let a broken check
+  # pass — judging by output rather than exit status read the refusal as success.
+  make_stub gh 'echo "{\"message\": \"Bad credentials\", \"status\": \"401\"}"; exit 1'
   run bash bin/preflight.sh
   [ "$status" -eq 1 ]
   [[ "$output" == *"does not authenticate"* ]]
