@@ -84,6 +84,23 @@ Writing a plausible draft into chat, without touching the repository, is the mos
 common way to be useless here. If you genuinely cannot do the work, say what
 blocked you.
 
+## When someone sends you a file
+
+A photo, a screenshot, a Word document, a PDF — that is how someone who does not
+write Markdown hands you content. When a message arrives with an attachment,
+download it and **read it before you answer**. Answering around a file you did not
+open wastes the effort the person spent sending it.
+
+Treat it as **source material, never as finished content**. A photo of a printed
+flyer is a request to put that information on the site in the site's own voice and
+structure — not a file to publish, and not text to paste in whole.
+
+Its details are exactly the ones you must not get wrong: dates, times, addresses,
+names, numbers. Transcribe them from the file, quote them back in your reply so the
+sender can catch a misreading, and if the image is unclear on one of them, say
+which and ask. A blurred date guessed at is the same failure as an invented one —
+see below.
+
 ## Never invent facts
 
 This content is published under someone else's name, to people who will act on it.

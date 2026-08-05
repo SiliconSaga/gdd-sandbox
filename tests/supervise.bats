@@ -53,6 +53,19 @@ setup() {
   [[ "$output" != *"dangerously-skip-permissions"* ]]
 }
 
+@test "launch lets the agent open a file the user dropped in chat" {
+  # A photo of a flyer or a Word document is how a non-technical owner supplies
+  # content. Fetching it is plumbing, not a decision, so it must not arrive as a
+  # permission card: the person who sent the file cannot evaluate a tool prompt
+  # about it, and the whole point of the gate is that they never have to.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"mcp__plugin:discord:discord__download_attachment"* ]]
+  # In the allow list, not the deny list.
+  allow="${output%%--disallowedTools*}"
+  [[ "$allow" == *"download_attachment"* ]]
+}
+
 @test "launch lets the agent open a pull request" {
   # The decision belongs on the PR page, which carries the preview and the
   # before/after screenshots — not on a permission card nobody can evaluate.

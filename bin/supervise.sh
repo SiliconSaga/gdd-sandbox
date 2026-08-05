@@ -25,7 +25,19 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # which carries the preview link and the before/after screenshots — rather than on
 # a permission card nobody can evaluate. What protects the live site is branch
 # protection plus the merge button, not a prompt.
-ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)}"
+#
+# download_attachment is how a dropped file — a photo of a flyer, a Word document
+# of revised copy — reaches the agent at all. Fetching one is plumbing rather than
+# a decision, and the person who just sent the file is the last person able to
+# evaluate a permission card about it. The file lands in a local inbox and is read
+# with Read, which is already allowed; nothing leaves the container.
+#
+# The ids keep the colon form of the server name even though the runtime reports
+# them with underscores (`mcp__plugin_discord_discord__reply`) — the CLI sanitizes
+# the server name when it registers the tool. The colon form is what grants: it was
+# observed working under `--permission-mode default`, where no classifier could
+# have approved the call instead. Do not "correct" the colons.
+ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)}"
 # Hard denials: destructive, out-of-scope, or irreversible — no card, no override.
 # An "ask" has no safe answerer here; the person on the other end cannot judge it.
 #

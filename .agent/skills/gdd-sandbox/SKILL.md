@@ -150,16 +150,26 @@ the level of the claim.
 
 ## Safety posture
 
-- Pre-allow **only** the chat `reply`/`react` tools, via `--allowedTools` on the
-  launch command in `bin/supervise.sh` (override with `GDD_ALLOWED_TOOLS`), so they
-  never prompt. **Never** `--dangerously-skip-permissions` / bypass-all in
-  production — the proto used bypass only to isolate the auth round-trip.
-  A `--settings` file with `permissions.allow` was verified live NOT to grant MCP
-  tools; `--allowedTools` is the mechanism that works. Ids are
-  `mcp__plugin:discord:discord__reply` / `__react`.
-- **Known gap:** anything *not* pre-allowed still relays a permission card to the
-  chat user. For a non-technical user that is the rubber-stamp trap — routine work
-  tools need pre-allowing and destructive ones hard-denying before a real pilot.
+- Pre-allow via `--allowedTools` on the launch command in `bin/supervise.sh`
+  (override with `GDD_ALLOWED_TOOLS`), so those tools never prompt: the chat tools,
+  the routine work tools (Read/Write/Edit, the `ws` verbs up to `ws cr`), and
+  `download_attachment` for a file the user sent. `--disallowedTools` hard-denies
+  merging, releasing and destructive commands. **Never**
+  `--dangerously-skip-permissions` / bypass-all in production — the proto used
+  bypass only to isolate the auth round-trip. A `--settings` file with
+  `permissions.allow` was verified live NOT to grant MCP tools; `--allowedTools` is
+  the mechanism that works. Ids are `mcp__plugin:discord:discord__reply` /
+  `__react` / `__download_attachment`.
+- **Keep the colons in the MCP ids.** The runtime reports these tools with
+  underscores (`mcp__plugin_discord_discord__reply`) because the CLI sanitizes the
+  server name when registering them, which makes the colon form we pass look wrong.
+  It is not: `reply` calls were observed succeeding under `--permission-mode
+  default`, where no classifier could have approved them instead. Verified 2026-08-05
+  from the session transcripts; do not "fix" it.
+- **Known gap:** anything in neither list is left to `--permission-mode auto`, and
+  whatever it will not decide still relays a permission card to the chat user. For a
+  non-technical user that is the rubber-stamp trap — a card reaching them means the
+  operator has a list to extend, not that they should answer it.
 - The workspace holds only in-scope repos, so out-of-scope work is impossible by
   absence rather than by a rule the agent could talk around.
 - Consequential decisions (merge, publish) belong in chat as **outcome** questions

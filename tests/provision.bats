@@ -139,6 +139,17 @@ setup() {
   [[ "$output" == *"preparing the pull request"* ]]
 }
 
+@test "the briefing says what to do with a file dropped in chat" {
+  # Having the tool is not the same as knowing what a file is for. A photo of a
+  # newspaper clipping is source material to read and act on, never something to
+  # publish as-is, and its details are exactly the ones worth transcribing wrong.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"sends you a file"* ]]
+  [[ "$output" == *"read it before you answer"* ]]
+}
+
 @test "provision tells the agent where to send technical detail" {
   # That direct message is the only alert this sandbox has — nobody is watching a
   # dashboard, so losing it means the first sign of trouble is a person waiting.

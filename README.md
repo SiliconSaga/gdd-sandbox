@@ -37,11 +37,14 @@ Validated live on 2026-07-26 against a real Discord bot and a real site componen
 
 **Not yet done** (roughly in the order they should be tackled)
 
-1. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
-   pre-allowed, so anything else still relays a permission card to the chat user.
-   Asking a non-technical person to approve "run jekyll build?" teaches them to tap
-   Allow reflexively — worse than no gate. Routine work tools need pre-allowing and
-   destructive ones hard-denying before any real pilot.
+1. **The permission posture is bounded, not complete.** The chat tools, the routine
+   work tools, and fetching a file someone dropped in chat are pre-allowed;
+   destructive and irreversible ones are hard-denied. What remains is everything in
+   neither list: `--permission-mode auto` classifies those, and anything it will not
+   decide still relays a permission card to the chat user. Asking a non-technical
+   person to approve "run jekyll build?" teaches them to tap Allow reflexively —
+   worse than no gate — so a card reaching them is a gap for the operator to close,
+   not a question for them to answer.
 4. **Shared channels are unsupported.** `access.json.template` only expresses direct
    messages. A shared channel (operator + user + agent, the intended pilot setup)
    needs a `groups` entry keyed on the channel id plus a mention policy, and `run.sh`
@@ -120,11 +123,12 @@ runs as a system service.
 ## Safety
 
 The container holds only the in-scope repositories, so out-of-scope work is
-impossible by *absence* rather than by a rule the agent could talk around. Only
-the chat `reply`/`react` tools are pre-allowed; everything else stays gated.
-Consequential decisions (merge, publish) are asked in chat as **outcomes** in
-human terms — never as raw tool prompts, which a non-technical person cannot
-meaningfully judge.
+impossible by *absence* rather than by a rule the agent could talk around. What is
+pre-allowed is chat, reading and writing files in the target, the `ws` verbs up to
+opening a pull request, and downloading a file the user sent; merging, releasing
+and destructive commands are denied outright. Consequential decisions (merge,
+publish) are asked in chat as **outcomes** in human terms — never as raw tool
+prompts, which a non-technical person cannot meaningfully judge.
 
 ## Giving the sandbox a GitHub identity
 
