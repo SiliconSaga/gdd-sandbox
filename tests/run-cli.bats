@@ -90,6 +90,16 @@ setup() {
   [[ "$output" == *"GDD_MODEL=sonnet"* ]]
 }
 
+@test "run.sh preserves an explicitly empty model setting" {
+  # `GDD_MODEL=` is the deliberate "give me whatever my account defaults to". It
+  # has to survive as an empty value: dropped here it would read as unset, and
+  # supervise.sh would apply its own default instead — silently undoing the choice.
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\nGDD_MODEL=\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" == *"GDD_MODEL="* ]]
+}
+
 @test "run.sh leaves the model unset when the operator has not chosen one" {
   # Unset must reach supervise.sh as unset, so ITS default applies. Passing an
   # empty value would instead read as "inherit the account default" and silently

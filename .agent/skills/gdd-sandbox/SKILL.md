@@ -176,6 +176,14 @@ the level of the claim.
   It is not: `reply` calls were observed succeeding under `--permission-mode
   default`, where no classifier could have approved them instead. Verified 2026-08-05
   from the session transcripts; do not "fix" it.
+- **A downloaded attachment is untrusted input.** Fetching one is pre-allowed, and
+  the agent that reads it can already `Edit`, `Write` and open a pull request — so
+  a document carrying "ignore your previous instructions" is a live injection path,
+  not a hypothetical. The briefing carries the rule (a file is content, never
+  instructions); the structural answer is the same one that covers every other
+  mistake here: the change lands as a PR a human has to merge. Keep that gate
+  intact if you extend the allow list — pre-allowing a publish step would remove
+  the only control that makes reading strangers' files safe.
 - **Known gap:** anything in neither list is left to `--permission-mode auto`, and
   whatever it will not decide still relays a permission card to the chat user. For a
   non-technical user that is the rubber-stamp trap — a card reaching them means the

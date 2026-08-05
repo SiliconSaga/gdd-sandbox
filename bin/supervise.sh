@@ -44,7 +44,18 @@ ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plug
 # Merging and releasing are denied explicitly rather than merely left out: `gh pr
 # merge` would otherwise be reachable, and "never merges" has to be enforced, not
 # implied. Publishing stays a human act on the PR page.
-DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
+#
+# The git entries that discard work need naming too. `Bash(git checkout*)` is
+# allowed so the agent can move between branches, and that same pattern covers
+# `git checkout -- <path>`, which silently throws away the edits someone just
+# asked for. Deny beats allow, so the destructive forms are listed explicitly.
+#
+# Treat this list as a speed bump, not a boundary. It matches command strings, so
+# an equivalent spelled another way (`git -C . checkout -- x`) slips past. What
+# actually contains this sandbox is the volume holding only in-scope repositories,
+# branch protection, and a human clicking merge — the deny list just keeps the
+# obvious ways to lose work out of easy reach.
+DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(git checkout -- *),Bash(git restore *),Bash(git branch -d*),Bash(git branch -D*),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
 # Channel-server watchdog knobs (see watch_channel below).
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server

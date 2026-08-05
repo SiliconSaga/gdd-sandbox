@@ -5,6 +5,9 @@ setup() {
   export GDD_WORKSPACE="$BATS_TEST_TMPDIR/ws"; mkdir -p "$GDD_WORKSPACE"
   export ROTATE_FLAG="$BATS_TEST_TMPDIR/rotate"
   export SUPERVISE_ONCE=1
+  # A developer shell or CI job that happens to export GDD_MODEL would otherwise
+  # make the default test assert the override instead of the default.
+  unset GDD_MODEL
   # 'script' is the PTY wrapper. make_stub already records the argv, so the body
   # stays empty — logging it again would double every count the tests assert on.
   make_stub script
@@ -89,9 +92,29 @@ setup() {
   bash bin/supervise.sh
   run cat "$STUB_LOG"
   [[ "$output" == *"mcp__plugin:discord:discord__download_attachment"* ]]
-  # In the allow list, not the deny list.
+  # In the allow list, not the deny list. Checking only the allow side would pass
+  # even if the same tool appeared in both, where the deny would win silently.
   allow="${output%%--disallowedTools*}"
   [[ "$allow" == *"download_attachment"* ]]
+  deny="${output#*--disallowedTools}"
+  [[ "$deny" != *"download_attachment"* ]]
+}
+
+@test "launch denies the git commands that throw work away" {
+  # `Bash(git checkout*)` is allowed so the agent can switch branches, and that
+  # same pattern would otherwise cover `git checkout -- <path>`, which silently
+  # discards the edits someone just asked for. Deny beats allow, so naming the
+  # destructive forms explicitly is what stops them.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  deny="${output#*--disallowedTools}"
+  [[ "$deny" == *"git checkout -- "* ]]
+  [[ "$deny" == *"git restore"* ]]
+  [[ "$deny" == *"git branch -d"* ]]
+  [[ "$deny" == *"git branch -D"* ]]
+  # ...without losing the ability to move between branches.
+  allow="${output%%--disallowedTools*}"
+  [[ "$allow" == *"git checkout*"* ]]
 }
 
 @test "launch lets the agent open a pull request" {
