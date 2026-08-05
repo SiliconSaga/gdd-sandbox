@@ -53,6 +53,34 @@ setup() {
   [[ "$output" != *"dangerously-skip-permissions"* ]]
 }
 
+@test "launch pins the model rather than inheriting whatever the account defaults to" {
+  # Left unset the session silently took the account default, which was not the
+  # model the operator believed it was running — invisible until someone read the
+  # transcripts. The published site is written under someone else's name, so the
+  # reasoning-quality choice is deliberate and recorded, not inherited.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--model"* ]]
+  [[ "$output" == *"opus"* ]]
+}
+
+@test "an operator can choose a different model" {
+  export GDD_MODEL=sonnet
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--model sonnet"* ]]
+  [[ "$output" != *"opus"* ]]
+}
+
+@test "an empty model setting deliberately inherits the account default" {
+  # The escape hatch: an operator who wants whatever their plan gives them should
+  # not have to name a model to get it, and an empty --model would be an error.
+  export GDD_MODEL=
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" != *"--model"* ]]
+}
+
 @test "launch lets the agent open a file the user dropped in chat" {
   # A photo of a flyer or a Word document is how a non-technical owner supplies
   # content. Fetching it is plumbing, not a decision, so it must not arrive as a

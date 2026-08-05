@@ -69,7 +69,17 @@ leading space breaks the variable name.
 
 ## Session lifecycle
 
-`bin/supervise.sh` keeps a PTY-hosted `claude --channels` session alive. Two paths:
+`bin/supervise.sh` keeps a PTY-hosted `claude --channels` session alive.
+
+**The model is pinned, not inherited** — `GDD_MODEL` (default `opus`) becomes
+`--model` on the launch line. Left to the account default a sandbox once ran a
+different model than its operator believed, discoverable only by reading
+`~/.claude/projects/*/**.jsonl` for `"model":`. Set `sonnet` for a cheaper sandbox,
+or empty to deliberately inherit. It applies at launch, so a running session keeps
+its model until it restarts or is rotated — and that transcript grep is how you
+check what a live session is actually on, not the banner.
+
+Two lifecycle paths:
 
 - **Crash recovery** (power loss, process death) — relaunches with `--continue`,
   recovering the single most-recent session. Automatic; capped backoff.

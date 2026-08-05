@@ -81,6 +81,25 @@ setup() {
   [[ "$output" == *"GDD_GITHUB_EMAIL=311+Kencierge@users.noreply.github.com"* ]]
 }
 
+@test "run.sh passes the model choice through from the same file" {
+  # Same reason as the identity: one place to configure. Without the pass-through
+  # the variable would have to be exported into the operator's shell instead.
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\nGDD_MODEL=sonnet\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" == *"GDD_MODEL=sonnet"* ]]
+}
+
+@test "run.sh leaves the model unset when the operator has not chosen one" {
+  # Unset must reach supervise.sh as unset, so ITS default applies. Passing an
+  # empty value would instead read as "inherit the account default" and silently
+  # undo the pin.
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" != *"GDD_MODEL"* ]]
+}
+
 @test "run.sh falls back to a sane identity when none is configured" {
   printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
   bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"

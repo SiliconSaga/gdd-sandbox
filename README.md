@@ -205,6 +205,7 @@ than treating it as broken.
 | `GDD_OPERATOR_CHAT` | Your own chat id. When the agent is blocked, the person who asked gets plain language and **you get the technical detail by direct message**. Nothing else is watching this sandbox, so that message is the alert. |
 | `GDD_BRIEFING_EXTRA` | Free text appended to the agent's briefing: what this site is, who reads it, house style — anything the shipped briefing cannot know. Takes effect on restart, no rebuild. |
 | `GDD_PUBLIC_EMAIL_OK` | Set to `1` to declare that a non-no-reply commit email is deliberate, so preflight stops advising about it. |
+| `GDD_MODEL` | Which model the session runs on. Defaults to `opus`: the work is published under someone else's name, and the failure that matters is a change that is literally correct and semantically wrong, which is a reasoning failure. Set `sonnet` for a cheaper, faster sandbox, or leave it **empty** to inherit whatever your account defaults to. Applies at session launch, so a running session keeps its model until it restarts or you rotate it. |
 
 ### Per-launch flags
 

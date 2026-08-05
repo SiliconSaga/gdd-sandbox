@@ -63,6 +63,20 @@ PROMPT_POLL="${GDD_PROMPT_POLL:-150}"
 # call. The prompt watchdog stays too, since anything that still asks would
 # otherwise hang.
 PERMISSION_MODE="${GDD_PERMISSION_MODE:-auto}"
+# Which model the session runs on. Pinned rather than inherited: left to the
+# account default a sandbox silently ran a different model than its operator
+# believed, visible only by reading the session transcripts. The work is published
+# under someone else's name, and the failure that matters here is a change that is
+# literally correct and semantically wrong — a reasoning failure — so the stronger
+# model is the default and the cheaper one is a deliberate downgrade.
+#
+# An alias, not a pinned version id: the sandbox is long-lived and an id goes stale
+# where `opus` keeps meaning the current one. Set GDD_MODEL to empty to inherit the
+# account default instead — an empty --model would be an error, so the flag is
+# omitted entirely in that case.
+MODEL="${GDD_MODEL-opus}"
+MODEL_FLAG=""
+[ -n "$MODEL" ] && MODEL_FLAG="--model $MODEL"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=bin/lib.sh
 . "$HERE/lib.sh"
@@ -140,7 +154,7 @@ launch() {
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
-    "claude --channels plugin:discord@claude-plugins-official --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
+    "claude --channels plugin:discord@claude-plugins-official $MODEL_FLAG --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
   kill "$w" "$watcher" "$prompt_watcher" 2>/dev/null || true
   return "$rc"
