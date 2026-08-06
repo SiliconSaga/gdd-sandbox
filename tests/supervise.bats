@@ -5,9 +5,11 @@ setup() {
   export GDD_WORKSPACE="$BATS_TEST_TMPDIR/ws"; mkdir -p "$GDD_WORKSPACE"
   export ROTATE_FLAG="$BATS_TEST_TMPDIR/rotate"
   export SUPERVISE_ONCE=1
-  # A developer shell or CI job that happens to export GDD_MODEL would otherwise
-  # make the default test assert the override instead of the default.
-  unset GDD_MODEL
+  # Every policy knob is overridable by env, so a developer shell or CI job that
+  # exports one would make these tests assert the override while reporting that
+  # they checked the default — the failure mode where a test passes about the
+  # wrong thing.
+  unset GDD_MODEL GDD_ALLOWED_TOOLS GDD_DENIED_TOOLS
   # 'script' is the PTY wrapper. make_stub already records the argv, so the body
   # stays empty — logging it again would double every count the tests assert on.
   make_stub script
@@ -109,6 +111,9 @@ setup() {
   run cat "$STUB_LOG"
   deny="${output#*--disallowedTools}"
   [[ "$deny" == *"git checkout -- "* ]]
+  # `git checkout HEAD -- path` discards exactly the same way, and names a source
+  # first so it slips past a pattern anchored on `checkout --`.
+  [[ "$deny" == *"git checkout * -- "* ]]
   [[ "$deny" == *"git restore"* ]]
   [[ "$deny" == *"git branch -d"* ]]
   [[ "$deny" == *"git branch -D"* ]]

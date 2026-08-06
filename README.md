@@ -45,6 +45,15 @@ Validated live on 2026-07-26 against a real Discord bot and a real site componen
    person to approve "run jekyll build?" teaches them to tap Allow reflexively —
    worse than no gate — so a card reaching them is a gap for the operator to close,
    not a question for them to answer.
+2. **An injected attachment can still cause pre-merge noise.** A file dropped in
+   chat is untrusted input, and the agent reading it can write to its workspace,
+   push a branch and open a pull request without a card. The briefing tells it to
+   treat a file as content rather than instructions, but that is guidance, not
+   enforcement. Nothing reaches the live site — publishing needs branch protection
+   plus a human merge, which the agent is denied — so the exposure is a bogus PR
+   in one scoped repository. Accepted knowingly: the enforcement alternative is a
+   permission card in front of ordinary work, shown to someone who cannot evaluate
+   it, which teaches the reflex that would defeat every other gate here.
 4. **Shared channels are unsupported.** `access.json.template` only expresses direct
    messages. A shared channel (operator + user + agent, the intended pilot setup)
    needs a `groups` entry keyed on the channel id plus a mention policy, and `run.sh`

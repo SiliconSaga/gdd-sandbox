@@ -97,7 +97,10 @@ setup() {
   printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\nGDD_MODEL=\n' > "$BATS_TEST_TMPDIR/secrets.env"
   bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
   run cat "$STUB_LOG"
-  [[ "$output" == *"GDD_MODEL="* ]]
+  # The value has to be EMPTY, not merely present: a prefix match would pass just
+  # as happily on `GDD_MODEL=sonnet`, testing nothing.
+  [[ "$output" == *"GDD_MODEL="[[:space:]]* || "$output" == *"GDD_MODEL=" ]]
+  [[ "$output" != *"GDD_MODEL="[![:space:]]* ]]
 }
 
 @test "run.sh leaves the model unset when the operator has not chosen one" {

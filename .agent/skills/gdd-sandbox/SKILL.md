@@ -180,10 +180,19 @@ the level of the claim.
   the agent that reads it can already `Edit`, `Write` and open a pull request — so
   a document carrying "ignore your previous instructions" is a live injection path,
   not a hypothetical. The briefing carries the rule (a file is content, never
-  instructions); the structural answer is the same one that covers every other
-  mistake here: the change lands as a PR a human has to merge. Keep that gate
-  intact if you extend the allow list — pre-allowing a publish step would remove
-  the only control that makes reading strangers' files safe.
+  instructions).
+- **Be precise about what the merge gate protects: publication, and nothing
+  earlier.** A successful injection can still write files on the container's
+  volume, push a branch, and open a pull request, because those are pre-allowed
+  and no permission card stands in front of them. What it cannot do is put
+  anything on the live site — that needs branch protection plus a human clicking
+  merge, and merging is denied to the agent outright. The residual risk is
+  therefore noise and a bogus PR in a single repository, both visible and
+  reversible; it is **accepted deliberately**, because the alternative is a
+  permission card shown to a non-technical user, which trains the reflex that
+  makes every other gate here worthless. Bound it by keeping the token scoped to
+  one repository and the workspace holding only in-scope repos. If you ever
+  pre-allow a publish step, this trade collapses — do not.
 - **Known gap:** anything in neither list is left to `--permission-mode auto`, and
   whatever it will not decide still relays a permission card to the chat user. For a
   non-technical user that is the rubber-stamp trap — a card reaching them means the
