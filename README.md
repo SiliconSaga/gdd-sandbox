@@ -37,11 +37,23 @@ Validated live on 2026-07-26 against a real Discord bot and a real site componen
 
 **Not yet done** (roughly in the order they should be tackled)
 
-1. **The permission posture is incomplete.** Only the chat `reply`/`react` tools are
-   pre-allowed, so anything else still relays a permission card to the chat user.
-   Asking a non-technical person to approve "run jekyll build?" teaches them to tap
-   Allow reflexively — worse than no gate. Routine work tools need pre-allowing and
-   destructive ones hard-denying before any real pilot.
+1. **The permission posture is bounded, not complete.** The chat tools, the routine
+   work tools, and fetching a file someone dropped in chat are pre-allowed;
+   destructive and irreversible ones are hard-denied. What remains is everything in
+   neither list: `--permission-mode auto` classifies those, and anything it will not
+   decide still relays a permission card to the chat user. Asking a non-technical
+   person to approve "run jekyll build?" teaches them to tap Allow reflexively —
+   worse than no gate — so a card reaching them is a gap for the operator to close,
+   not a question for them to answer.
+2. **An injected attachment can still cause pre-merge noise.** A file dropped in
+   chat is untrusted input, and the agent reading it can write to its workspace,
+   push a branch and open a pull request without a card. The briefing tells it to
+   treat a file as content rather than instructions, but that is guidance, not
+   enforcement. Nothing reaches the live site — publishing needs branch protection
+   plus a human merge, which the agent is denied — so the exposure is a bogus PR
+   in one scoped repository. Accepted knowingly: the enforcement alternative is a
+   permission card in front of ordinary work, shown to someone who cannot evaluate
+   it, which teaches the reflex that would defeat every other gate here.
 4. **Shared channels are unsupported.** `access.json.template` only expresses direct
    messages. A shared channel (operator + user + agent, the intended pilot setup)
    needs a `groups` entry keyed on the channel id plus a mention policy, and `run.sh`
@@ -120,11 +132,12 @@ runs as a system service.
 ## Safety
 
 The container holds only the in-scope repositories, so out-of-scope work is
-impossible by *absence* rather than by a rule the agent could talk around. Only
-the chat `reply`/`react` tools are pre-allowed; everything else stays gated.
-Consequential decisions (merge, publish) are asked in chat as **outcomes** in
-human terms — never as raw tool prompts, which a non-technical person cannot
-meaningfully judge.
+impossible by *absence* rather than by a rule the agent could talk around. What is
+pre-allowed is chat, reading and writing files in the target, the `ws` verbs up to
+opening a pull request, and downloading a file the user sent; merging, releasing
+and destructive commands are denied outright. Consequential decisions (merge,
+publish) are asked in chat as **outcomes** in human terms — never as raw tool
+prompts, which a non-technical person cannot meaningfully judge.
 
 ## Giving the sandbox a GitHub identity
 
@@ -201,6 +214,7 @@ than treating it as broken.
 | `GDD_OPERATOR_CHAT` | Your own chat id. When the agent is blocked, the person who asked gets plain language and **you get the technical detail by direct message**. Nothing else is watching this sandbox, so that message is the alert. |
 | `GDD_BRIEFING_EXTRA` | Free text appended to the agent's briefing: what this site is, who reads it, house style — anything the shipped briefing cannot know. Takes effect on restart, no rebuild. |
 | `GDD_PUBLIC_EMAIL_OK` | Set to `1` to declare that a non-no-reply commit email is deliberate, so preflight stops advising about it. |
+| `GDD_MODEL` | Which model the session runs on. Defaults to `opus`: the work is published under someone else's name, and the failure that matters is a change that is literally correct and semantically wrong, which is a reasoning failure. Set `sonnet` for a cheaper, faster sandbox, or leave it **empty** to inherit whatever your account defaults to. Applies at session launch, so a running session keeps its model until it restarts or you rotate it. |
 
 ### Per-launch flags
 
@@ -224,6 +238,14 @@ The watchdogs, health thresholds, permission lists and file paths are all
 overridable — see the `${GDD_...:-default}` lines at the top of `bin/supervise.sh`,
 `bin/healthcheck.sh` and `bin/preflight.sh`. The defaults are what this component
 was tested with; change them to debug, not routinely.
+
+**One exception, deliberately asymmetric:** `GDD_ALLOWED_TOOLS` replaces the allow
+list, because narrowing what the agent may do is always safe. `GDD_DENIED_TOOLS`
+*adds to* the deny list rather than replacing it — otherwise adding a rule of your
+own would silently carry off the merge, release and `rm` denials, and "never
+merges" is meant to be enforced rather than assumed. To drop a built-in denial you
+have to edit the script, which is the sort of change that should be visible in a
+diff.
 
 ### Checking it
 

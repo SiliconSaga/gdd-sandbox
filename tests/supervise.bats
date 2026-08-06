@@ -5,6 +5,11 @@ setup() {
   export GDD_WORKSPACE="$BATS_TEST_TMPDIR/ws"; mkdir -p "$GDD_WORKSPACE"
   export ROTATE_FLAG="$BATS_TEST_TMPDIR/rotate"
   export SUPERVISE_ONCE=1
+  # Every policy knob is overridable by env, so a developer shell or CI job that
+  # exports one would make these tests assert the override while reporting that
+  # they checked the default — the failure mode where a test passes about the
+  # wrong thing.
+  unset GDD_MODEL GDD_ALLOWED_TOOLS GDD_DENIED_TOOLS
   # 'script' is the PTY wrapper. make_stub already records the argv, so the body
   # stays empty — logging it again would double every count the tests assert on.
   make_stub script
@@ -51,6 +56,83 @@ setup() {
   # Never a blanket bypass.
   [[ "$output" != *"bypassPermissions"* ]]
   [[ "$output" != *"dangerously-skip-permissions"* ]]
+}
+
+@test "launch pins the model rather than inheriting whatever the account defaults to" {
+  # Left unset the session silently took the account default, which was not the
+  # model the operator believed it was running — invisible until someone read the
+  # transcripts. The published site is written under someone else's name, so the
+  # reasoning-quality choice is deliberate and recorded, not inherited.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--model"* ]]
+  [[ "$output" == *"opus"* ]]
+}
+
+@test "an operator can choose a different model" {
+  export GDD_MODEL=sonnet
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--model sonnet"* ]]
+  [[ "$output" != *"opus"* ]]
+}
+
+@test "an empty model setting deliberately inherits the account default" {
+  # The escape hatch: an operator who wants whatever their plan gives them should
+  # not have to name a model to get it, and an empty --model would be an error.
+  export GDD_MODEL=
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" != *"--model"* ]]
+}
+
+@test "launch lets the agent open a file the user dropped in chat" {
+  # A photo of a flyer or a Word document is how a non-technical owner supplies
+  # content. Fetching it is plumbing, not a decision, so it must not arrive as a
+  # permission card: the person who sent the file cannot evaluate a tool prompt
+  # about it, and the whole point of the gate is that they never have to.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"mcp__plugin:discord:discord__download_attachment"* ]]
+  # In the allow list, not the deny list. Checking only the allow side would pass
+  # even if the same tool appeared in both, where the deny would win silently.
+  allow="${output%%--disallowedTools*}"
+  [[ "$allow" == *"download_attachment"* ]]
+  deny="${output#*--disallowedTools}"
+  [[ "$deny" != *"download_attachment"* ]]
+}
+
+@test "launch denies the git commands that throw work away" {
+  # `Bash(git checkout*)` is allowed so the agent can switch branches, and that
+  # same pattern would otherwise cover `git checkout -- <path>`, which silently
+  # discards the edits someone just asked for. Deny beats allow, so naming the
+  # destructive forms explicitly is what stops them.
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  deny="${output#*--disallowedTools}"
+  [[ "$deny" == *"git checkout -- "* ]]
+  # `git checkout HEAD -- path` discards exactly the same way, and names a source
+  # first so it slips past a pattern anchored on `checkout --`.
+  [[ "$deny" == *"git checkout * -- "* ]]
+  [[ "$deny" == *"git restore"* ]]
+  [[ "$deny" == *"git branch -d"* ]]
+  [[ "$deny" == *"git branch -D"* ]]
+  # ...without losing the ability to move between branches.
+  allow="${output%%--disallowedTools*}"
+  [[ "$allow" == *"git checkout*"* ]]
+}
+
+@test "an operator's extra deny rules add to the baseline, never replace it" {
+  # "never merges" is enforced, not implied — so it must not be possible to drop
+  # it by accident. An operator adding one rule of their own would otherwise
+  # silently take the merge, release and rm denials with it.
+  export GDD_DENIED_TOOLS='Bash(terraform *)'
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  deny="${output#*--disallowedTools}"
+  [[ "$deny" == *"terraform"* ]]
+  [[ "$deny" == *"gh pr merge"* ]]
+  [[ "$deny" == *"rm "* ]]
 }
 
 @test "launch lets the agent open a pull request" {

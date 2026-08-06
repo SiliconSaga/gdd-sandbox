@@ -25,14 +25,47 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # which carries the preview link and the before/after screenshots — rather than on
 # a permission card nobody can evaluate. What protects the live site is branch
 # protection plus the merge button, not a prompt.
-ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)}"
+#
+# download_attachment is how a dropped file — a photo of a flyer, a Word document
+# of revised copy — reaches the agent at all. Fetching one is plumbing rather than
+# a decision, and the person who just sent the file is the last person able to
+# evaluate a permission card about it. The file lands in a local inbox and is read
+# with Read, which is already allowed; nothing leaves the container.
+#
+# The ids keep the colon form of the server name even though the runtime reports
+# them with underscores (`mcp__plugin_discord_discord__reply`) — the CLI sanitizes
+# the server name when it registers the tool. The colon form is what grants: it was
+# observed working under `--permission-mode default`, where no classifier could
+# have approved the call instead. Do not "correct" the colons.
+ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)}"
 # Hard denials: destructive, out-of-scope, or irreversible — no card, no override.
 # An "ask" has no safe answerer here; the person on the other end cannot judge it.
 #
 # Merging and releasing are denied explicitly rather than merely left out: `gh pr
 # merge` would otherwise be reachable, and "never merges" has to be enforced, not
 # implied. Publishing stays a human act on the PR page.
-DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
+#
+# The git entries that discard work need naming too. `Bash(git checkout*)` is
+# allowed so the agent can move between branches, and that same pattern covers
+# `git checkout -- <path>`, which silently throws away the edits someone just
+# asked for. Deny beats allow, so the destructive forms are listed explicitly —
+# including the source-qualified spelling (`git checkout HEAD -- path`), which
+# discards identically while naming a source first.
+#
+# Treat this list as a speed bump, not a boundary. It matches command strings, so
+# an equivalent spelled another way (`git -C . checkout -- x`) slips past. What
+# actually contains this sandbox is the volume holding only in-scope repositories,
+# branch protection, and a human clicking merge — the deny list just keeps the
+# obvious ways to lose work out of easy reach.
+#
+# Note the asymmetry with ALLOWED_TOOLS above: that one an operator may replace
+# wholesale, because narrowing what the agent may do is always safe. This one is
+# ADDITIVE — `GDD_DENIED_TOOLS` appends. Replacing it would let an operator who
+# just wanted to add a rule of their own take the merge, release and rm denials
+# with them without noticing, and "never merges" is meant to be enforced rather
+# than politely assumed.
+DENIED_BASE="Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(git checkout -- *),Bash(git checkout * -- *),Bash(git restore *),Bash(git branch -d*),Bash(git branch -D*),Bash(chmod *),Bash(curl * | *),Bash(:(){*)"
+DENIED_TOOLS="$DENIED_BASE${GDD_DENIED_TOOLS:+,$GDD_DENIED_TOOLS}"
 # Channel-server watchdog knobs (see watch_channel below).
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server
@@ -51,6 +84,20 @@ PROMPT_POLL="${GDD_PROMPT_POLL:-150}"
 # call. The prompt watchdog stays too, since anything that still asks would
 # otherwise hang.
 PERMISSION_MODE="${GDD_PERMISSION_MODE:-auto}"
+# Which model the session runs on. Pinned rather than inherited: left to the
+# account default a sandbox silently ran a different model than its operator
+# believed, visible only by reading the session transcripts. The work is published
+# under someone else's name, and the failure that matters here is a change that is
+# literally correct and semantically wrong — a reasoning failure — so the stronger
+# model is the default and the cheaper one is a deliberate downgrade.
+#
+# An alias, not a pinned version id: the sandbox is long-lived and an id goes stale
+# where `opus` keeps meaning the current one. Set GDD_MODEL to empty to inherit the
+# account default instead — an empty --model would be an error, so the flag is
+# omitted entirely in that case.
+MODEL="${GDD_MODEL-opus}"
+MODEL_FLAG=""
+[ -n "$MODEL" ] && MODEL_FLAG="--model $MODEL"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=bin/lib.sh
 . "$HERE/lib.sh"
@@ -128,7 +175,7 @@ launch() {
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
-    "claude --channels plugin:discord@claude-plugins-official --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
+    "claude --channels plugin:discord@claude-plugins-official $MODEL_FLAG --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
   kill "$w" "$watcher" "$prompt_watcher" 2>/dev/null || true
   return "$rc"
