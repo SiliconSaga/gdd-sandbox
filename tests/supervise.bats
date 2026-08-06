@@ -122,6 +122,19 @@ setup() {
   [[ "$allow" == *"git checkout*"* ]]
 }
 
+@test "an operator's extra deny rules add to the baseline, never replace it" {
+  # "never merges" is enforced, not implied — so it must not be possible to drop
+  # it by accident. An operator adding one rule of their own would otherwise
+  # silently take the merge, release and rm denials with it.
+  export GDD_DENIED_TOOLS='Bash(terraform *)'
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  deny="${output#*--disallowedTools}"
+  [[ "$deny" == *"terraform"* ]]
+  [[ "$deny" == *"gh pr merge"* ]]
+  [[ "$deny" == *"rm "* ]]
+}
+
 @test "launch lets the agent open a pull request" {
   # The decision belongs on the PR page, which carries the preview and the
   # before/after screenshots — not on a permission card nobody can evaluate.

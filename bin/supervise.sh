@@ -57,7 +57,15 @@ ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plug
 # actually contains this sandbox is the volume holding only in-scope repositories,
 # branch protection, and a human clicking merge — the deny list just keeps the
 # obvious ways to lose work out of easy reach.
-DENIED_TOOLS="${GDD_DENIED_TOOLS:-Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(git checkout -- *),Bash(git checkout * -- *),Bash(git restore *),Bash(git branch -d*),Bash(git branch -D*),Bash(chmod *),Bash(curl * | *),Bash(:(){*)}"
+#
+# Note the asymmetry with ALLOWED_TOOLS above: that one an operator may replace
+# wholesale, because narrowing what the agent may do is always safe. This one is
+# ADDITIVE — `GDD_DENIED_TOOLS` appends. Replacing it would let an operator who
+# just wanted to add a rule of their own take the merge, release and rm denials
+# with them without noticing, and "never merges" is meant to be enforced rather
+# than politely assumed.
+DENIED_BASE="Bash(gh pr merge*),Bash(gh release*),Bash(gh repo delete*),Bash(rm *),Bash(sudo *),Bash(git push --force*),Bash(git reset --hard*),Bash(git clean *),Bash(git checkout -- *),Bash(git checkout * -- *),Bash(git restore *),Bash(git branch -d*),Bash(git branch -D*),Bash(chmod *),Bash(curl * | *),Bash(:(){*)"
+DENIED_TOOLS="$DENIED_BASE${GDD_DENIED_TOOLS:+,$GDD_DENIED_TOOLS}"
 # Channel-server watchdog knobs (see watch_channel below).
 CHANNEL_PATTERN="${GDD_CHANNEL_PATTERN:-claude-plugins-official/discord}"
 CHANNEL_GRACE="${GDD_CHANNEL_GRACE:-60}"   # let the session spawn its MCP server

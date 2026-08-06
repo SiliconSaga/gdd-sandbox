@@ -239,6 +239,14 @@ overridable — see the `${GDD_...:-default}` lines at the top of `bin/supervise
 `bin/healthcheck.sh` and `bin/preflight.sh`. The defaults are what this component
 was tested with; change them to debug, not routinely.
 
+**One exception, deliberately asymmetric:** `GDD_ALLOWED_TOOLS` replaces the allow
+list, because narrowing what the agent may do is always safe. `GDD_DENIED_TOOLS`
+*adds to* the deny list rather than replacing it — otherwise adding a rule of your
+own would silently carry off the merge, release and `rm` denials, and "never
+merges" is meant to be enforced rather than assumed. To drop a built-in denial you
+have to edit the script, which is the sort of change that should be visible in a
+diff.
+
 ### Checking it
 
 Provisioning runs `bin/preflight.sh` on every start and reports anything missing,
