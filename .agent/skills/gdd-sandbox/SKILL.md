@@ -101,6 +101,27 @@ session FIFO:
 ws docker exec <name> bash /opt/gdd-sandbox/bin/send.sh enter
 ```
 
+## Recycling one
+
+```bash
+bash bin/recycle.sh --target <component>   # harvest, then destroy
+bash bin/harvest.sh --target <component>   # harvest only
+```
+
+Never `docker rm` the container and its volumes directly: the Thalamus lives on
+the workspace volume and nowhere else, so that deletes the agent's memory without
+saying so. `recycle.sh` pairs the rescue with the destruction for exactly that
+reason.
+
+Harvest **refuses** while the target repository has uncommitted work — that work
+belongs in a pull request the agent opens while the sandbox still runs, not copied
+out as loose files. `--force` overrides once you have judged it disposable.
+
+It writes the notes beside the active thalami hoard (in `sandboxes/`) or to
+`.tmp/`, then prints what to record in your own Thalamus. Record it yourself:
+tooling moves bytes, the agent decides what they mean, and a script that edits
+that file would be guessing at a structure the human owns.
+
 ## Liveness
 
 Process-level only, so nothing leaks into a user's chat:

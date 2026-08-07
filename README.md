@@ -129,6 +129,37 @@ automatic in testing because a human quietly supplied the missing step. For an
 always-on sandbox, enable the runtime's auto-start, or host it where the daemon
 runs as a system service.
 
+## Throwing a sandbox away
+
+A sandbox accumulates one thing that exists nowhere else: its **Thalamus**, the
+notes the agent kept across sessions. Removing the volume deletes it silently, so
+the command that destroys a sandbox is the command that rescues it first:
+
+```bash
+bash bin/recycle.sh --target <component>
+```
+
+It harvests, then removes the container and both volumes. Harvest alone:
+
+```bash
+bash bin/harvest.sh --target <component>
+```
+
+The notes land beside your own thalami hoard if one is active (in its own
+`sandboxes/` directory, kept separable — a tenant who graduates to their own plan
+should be able to take their memory with them), or in the workspace `.tmp/`
+otherwise. The script then prints the line to record in your own Thalamus: what
+was harvested, that it is housekeeping input next cycle, and that it should be
+deleted afterwards, since a harvested file means that sandbox no longer exists.
+
+**Uncommitted work in the target stops the harvest.** It has a proper home — a
+branch and a pull request the agent opens while the sandbox is still alive — and
+copying it to the host as loose files launders unfinished work into a directory
+nobody reviews. `--force` is for work you have decided is disposable.
+
+Note what the scripts deliberately do *not* do: write your Thalamus. Tooling moves
+the file, you decide what it means.
+
 ## Safety
 
 The container holds only the in-scope repositories, so out-of-scope work is
@@ -295,6 +326,7 @@ therefore watches for upstream *change* rather than trying to re-detect the bug.
 |---|---|
 | `Dockerfile` | Toolchain + baked agnostic GDD-core seed + warmed dependency caches + healthcheck |
 | `bin/build.sh` · `bin/run.sh` | Host: build the image; start + provision + supervise a sandbox |
+| `bin/harvest.sh` · `bin/recycle.sh` | Host: rescue a sandbox's notes; throw one away, harvesting first |
 | `bin/supervise.sh` · `bin/rotate.sh` · `bin/send.sh` | In-container: session lifecycle, rotation trigger, keystroke driver |
 | `provision/` | Provisioning: workspace seeding, onboarding patch, access allowlist, safe-posture settings |
 | `.agent/skills/gdd-sandbox/` | The operator skill — the detailed how-to |
