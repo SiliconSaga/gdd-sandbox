@@ -167,9 +167,18 @@ fi
 # the same friction. Seeded EMPTY, from the workspace's own template: this is the
 # agent's memory, not a place to put instructions. Never overwritten — by the
 # second start there may be notes in it worth more than the template.
-if [ ! -f "$WS/Thalamus.md" ] && [ -f "$WS/templates/thalamus.md" ]; then
-  cp "$WS/templates/thalamus.md" "$WS/Thalamus.md"
-  echo "provision: seeded an empty Thalamus"
+# Falls back to the image's own copy: on a workspace seeded before this existed,
+# the volume is kept and the seed copy is skipped, so the workspace template may
+# be missing or stale — and an already-running sandbox is exactly the case that
+# needs a Thalamus most, since it has been accumulating sessions without one.
+if [ ! -f "$WS/Thalamus.md" ]; then
+  for tpl in "$WS/templates/thalamus.md" "$SEED/templates/thalamus.md"; do
+    if [ -f "$tpl" ]; then
+      cp "$tpl" "$WS/Thalamus.md"
+      echo "provision: seeded an empty Thalamus"
+      break
+    fi
+  done
 fi
 
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"

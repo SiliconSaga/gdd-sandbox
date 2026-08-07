@@ -180,7 +180,11 @@ setup() {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh
   run cat "$GDD_BRIEFING_PATH"
-  [[ "$output" == *"AGENTS.md"* ]]
+  # Not a bare "AGENTS.md": that string already appears in the sentence about the
+  # WORKSPACE's documents, so the test would keep passing with this instruction
+  # deleted — an assertion about the wrong sentence.
+  [[ "$output" == *"Then read the target's own documentation"* ]]
+  [[ "$output" == *"README.md"* ]]
 }
 
 @test "the briefing forbids going quiet when a tool is refused" {
@@ -191,6 +195,11 @@ setup() {
   run cat "$GDD_BRIEFING_PATH"
   [[ "$output" == *"refused"* ]]
   [[ "$output" == *"never end your turn in silence"* ]]
+  # The whole ladder, not just its headline: one compliant retry, then stop, then
+  # report to both audiences. Any one of those going missing changes the outcome.
+  [[ "$output" == *"Try the compliant form once"* ]]
+  [[ "$output" == *"If that is refused too, stop trying"* ]]
+  [[ "$output" == *"the exact command and the exact refusal"* ]]
 }
 
 @test "provision seeds a Thalamus so rotation has notes to come back to" {
@@ -200,7 +209,21 @@ setup() {
   mkdir -p "$GDD_SEED/templates"
   printf -- '---\nlast_session: unset\n---\n\n# Thalamus\n' > "$GDD_SEED/templates/thalamus.md"
   bash provision/provision.sh
-  [ -f "$GDD_WORKSPACE/Thalamus.md" ]
+  # Byte-identical to the template: "a file exists" would also pass if
+  # provisioning wrote something unrelated there.
+  run cmp -s "$GDD_SEED/templates/thalamus.md" "$GDD_WORKSPACE/Thalamus.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "an already-seeded workspace still gets a Thalamus" {
+  # The case that actually needs it: a sandbox whose volume predates this, so the
+  # seed copy is skipped entirely. Nothing under the workspace can be relied on
+  # here, so the image's own template is the fallback.
+  mkdir -p "$GDD_SEED/templates" "$GDD_WORKSPACE/.git"
+  printf -- '---\nlast_session: unset\n---\n' > "$GDD_SEED/templates/thalamus.md"
+  bash provision/provision.sh
+  run cmp -s "$GDD_SEED/templates/thalamus.md" "$GDD_WORKSPACE/Thalamus.md"
+  [ "$status" -eq 0 ]
 }
 
 @test "provision never overwrites a Thalamus that already has notes in it" {
@@ -210,7 +233,9 @@ setup() {
   printf 'hard-won observation\n' > "$GDD_WORKSPACE/Thalamus.md"
   bash provision/provision.sh
   run cat "$GDD_WORKSPACE/Thalamus.md"
-  [[ "$output" == *"hard-won observation"* ]]
+  # Exactly the note, nothing appended around it: a substring check would pass
+  # while provisioning quietly stapled the template onto the agent's memory.
+  [ "$output" = "hard-won observation" ]
 }
 
 @test "provision tells the agent where to send technical detail" {

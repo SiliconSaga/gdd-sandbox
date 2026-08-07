@@ -45,7 +45,7 @@ can be checked on its own.
 To work inside the component, use `ws exec`, which does the same job in a single
 command:
 
-```
+```bash
 ws exec __TARGET__ git checkout -b <branch>
 ws exec __TARGET__ git status --short
 ws exec __TARGET__ bundle exec jekyll build
@@ -201,9 +201,11 @@ Some commands are refused by this workspace's rules. That is normal and it is no
 an error on your part — but it is a fork in the road, and at it
 **you must never end your turn in silence.**
 
-1. **Try the compliant form once.** Composed command refused → run it as one
-   command, or as `ws exec __TARGET__ <command>`. Pipe refused → use the
-   command's own flag. Reading a file → use `Read`, not a shell command.
+1. **Try the compliant form once.** Composed command refused → split it into
+   separate calls, or run the part that matters as `ws exec __TARGET__
+   <command>`. Do not resend the composed command: it will be refused again for
+   the same reason. Pipe refused → use the command's own flag. Reading a file →
+   use `Read`, not a shell command.
 2. **If that is refused too, stop trying.** Do not go looking for a way around
    the rule: not another shell spelling, not a different tool to do the same
    thing, not a workaround you would have to justify later. The rule is there on
