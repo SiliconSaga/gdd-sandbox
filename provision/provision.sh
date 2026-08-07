@@ -158,6 +158,29 @@ if [ -n "${GDD_BRIEFING_EXTRA:-}" ]; then
     >> "$briefing_path"
   echo "provision: appended the operator's briefing notes"
 fi
+# Give the workspace a Thalamus, if it has none yet.
+#
+# Rotation is safe *because* the durable notes carry what matters — that is the
+# whole argument for shedding context deliberately. It was resting on a file that
+# did not exist: the briefing promised a persistent Thalamus and nothing ever
+# created one, so every rotation started from zero and each session rediscovered
+# the same friction. Seeded EMPTY, from the workspace's own template: this is the
+# agent's memory, not a place to put instructions. Never overwritten — by the
+# second start there may be notes in it worth more than the template.
+# Falls back to the image's own copy: on a workspace seeded before this existed,
+# the volume is kept and the seed copy is skipped, so the workspace template may
+# be missing or stale — and an already-running sandbox is exactly the case that
+# needs a Thalamus most, since it has been accumulating sessions without one.
+if [ ! -f "$WS/Thalamus.md" ]; then
+  for tpl in "$WS/templates/thalamus.md" "$SEED/templates/thalamus.md"; do
+    if [ -f "$tpl" ]; then
+      cp "$tpl" "$WS/Thalamus.md"
+      echo "provision: seeded an empty Thalamus"
+      break
+    fi
+  done
+fi
+
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"
 
 # 5. Report whether the upstream quirks we work around still look the same.

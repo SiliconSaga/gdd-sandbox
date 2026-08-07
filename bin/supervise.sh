@@ -37,7 +37,17 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # the server name when it registers the tool. The colon form is what grants: it was
 # observed working under `--permission-mode default`, where no classifier could
 # have approved the call instead. Do not "correct" the colons.
-ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)}"
+#
+# `ws exec <target> …` is what makes the workspace's own rules satisfiable. The
+# GDD permission hook denies shell composition, so the shell habit every model
+# reaches for — `cd components/<target>; git checkout -b x` — is refused, and the
+# denial text explains the rule without naming a way to obey it. A cold session
+# spent seven denials rediscovering that and then stopped without a word. This is
+# the same action as one command with no `cd` and no `;`, so the compliant path
+# exists rather than only the prohibition.
+ALLOWED_BASE="mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)"
+[ -n "${GDD_TARGET:-}" ] && ALLOWED_BASE="$ALLOWED_BASE,Bash(ws exec $GDD_TARGET *)"
+ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-$ALLOWED_BASE}"
 # Hard denials: destructive, out-of-scope, or irreversible — no card, no override.
 # An "ask" has no safe answerer here; the person on the other end cannot judge it.
 #
