@@ -135,6 +135,19 @@ setup() {
   [[ "$deny" == *"rm "* ]]
 }
 
+@test "launch lets the agent work inside the target without composing a shell" {
+  # The workspace hook denies `cd <dir>; <cmd>` — correctly, and a cold session
+  # reaches for it anyway, because that is the shell habit. `ws exec <target>` is
+  # the same thing in one command, so the compliant path has to be available or
+  # the agent is left with a rule and no way to satisfy it. Observed for real: a
+  # fresh session burned seven denials and gave up without a word.
+  export GDD_TARGET=ken-site
+  bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  allow="${output%%--disallowedTools*}"
+  [[ "$allow" == *"ws exec ken-site *"* ]]
+}
+
 @test "launch lets the agent open a pull request" {
   # The decision belongs on the PR page, which carries the preview and the
   # before/after screenshots — not on a permission card nobody can evaluate.

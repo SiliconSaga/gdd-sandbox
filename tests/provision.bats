@@ -162,6 +162,57 @@ setup() {
   [[ "$output" == *"TBD"* ]]
 }
 
+@test "the briefing says how to run a command inside the target" {
+  # The gap that stalled a cold session: it knew ws exec existed (it had run
+  # ws orient and read the survey) and still reached for `cd <dir>; git ...`.
+  # Knowing a verb exists is weaker than being told which one to use.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"ws exec ken-site"* ]]
+  [[ "$output" == *"One command per call"* ]]
+}
+
+@test "the briefing points at the target's own documentation" {
+  # Only the workspace AGENTS.md/CLAUDE.md load automatically, because the session
+  # starts at the workspace root. A component's own docs are the project-specific
+  # half and have to be opened deliberately.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"AGENTS.md"* ]]
+}
+
+@test "the briefing forbids going quiet when a tool is refused" {
+  # What actually broke: a denied command ended the turn with no message to
+  # anyone. Stopping is allowed; stopping in silence is not.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"refused"* ]]
+  [[ "$output" == *"never end your turn in silence"* ]]
+}
+
+@test "provision seeds a Thalamus so rotation has notes to come back to" {
+  # Rotation is documented as safe *because* durable notes carry the state. There
+  # were none: the briefing promised a Thalamus and the file did not exist, so
+  # every rotation started from zero.
+  mkdir -p "$GDD_SEED/templates"
+  printf -- '---\nlast_session: unset\n---\n\n# Thalamus\n' > "$GDD_SEED/templates/thalamus.md"
+  bash provision/provision.sh
+  [ -f "$GDD_WORKSPACE/Thalamus.md" ]
+}
+
+@test "provision never overwrites a Thalamus that already has notes in it" {
+  # It is the agent's memory across restarts; provisioning runs on every start.
+  mkdir -p "$GDD_SEED/templates" "$GDD_WORKSPACE"
+  printf -- '---\nlast_session: unset\n---\n' > "$GDD_SEED/templates/thalamus.md"
+  printf 'hard-won observation\n' > "$GDD_WORKSPACE/Thalamus.md"
+  bash provision/provision.sh
+  run cat "$GDD_WORKSPACE/Thalamus.md"
+  [[ "$output" == *"hard-won observation"* ]]
+}
+
 @test "provision tells the agent where to send technical detail" {
   # That direct message is the only alert this sandbox has — nobody is watching a
   # dashboard, so losing it means the first sign of trouble is a person waiting.
