@@ -213,10 +213,69 @@ setup() {
   make_stub pgrep 'case "$*" in *claude-plugins-official/discord*) exit 1 ;; *) echo 1234 ;; esac'
   make_stub pkill 'echo "pkill $*" >> "$STUB_LOG"'
   # Keep the session "running" long enough for the watchdog to act.
-  make_stub script 'sleep 1'
+  make_stub script "printf \"Do you want to proceed?\n\" > \"$GDD_TTY_LOG\"; sleep 1"
   run bash bin/supervise.sh
   [[ "$output" == *"channel server gone"* ]]
   grep -q "pkill" "$STUB_LOG"
+}
+
+@test "a pending prompt tells the person, and the operator, before anything else" {
+  # Observed: a permission card reached the operator's DMs and the person in the
+  # channel saw nothing but "Back shortly" — for over three minutes, then never
+  # again. Whoever is waiting should learn that the agent is blocked on an
+  # approval, and the operator should learn that they are the one holding it up.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
+  make_stub pgrep 'echo 1234'
+  # launch() truncates the tty log on entry, so the fixture has to arrive the way
+  # the real thing does: written by the session as it runs.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  cat > "$STUB_BIN/notify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "notify $*" >> "$STUB_LOG"
+EOF
+  chmod +x "$STUB_BIN/notify.sh"
+  export GDD_NOTIFY="$STUB_BIN/notify.sh"
+  run bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify say"* ]]
+  [[ "$output" == *"notify operator"* ]]
+}
+
+@test "a prompt someone may still answer is not cancelled out from under them" {
+  # The watchdog declined a card at ~3m20s while a human was mid-decision — the
+  # exact thing its own comment says it must never do. The window has to outlast
+  # a notification reaching a phone, being read, and being acted on.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
+  make_stub pgrep 'echo 1234'
+  # launch() truncates the tty log on entry, so the fixture has to arrive the way
+  # the real thing does: written by the session as it runs.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  run bash bin/supervise.sh
+  [[ "$output" != *"declining a prompt"* ]]
+}
+
+@test "a prompt nobody answers is still declined, and said out loud" {
+  # The original purpose survives: a prompt with no answerer must not hang the
+  # session forever. But it stops being silent — going quiet is what made the
+  # last two failures indistinguishable from working.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=0
+  make_stub pgrep 'echo 1234'
+  # launch() truncates the tty log on entry, so the fixture has to arrive the way
+  # the real thing does: written by the session as it runs.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  cat > "$STUB_BIN/notify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "notify $*" >> "$STUB_LOG"
+EOF
+  chmod +x "$STUB_BIN/notify.sh"
+  export GDD_NOTIFY="$STUB_BIN/notify.sh"
+  run bash bin/supervise.sh
+  [[ "$output" == *"declining a prompt"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify say"* ]]
 }
 
 @test "a failed --continue falls back to a fresh session" {
