@@ -131,9 +131,13 @@ runs as a system service.
 
 ## Throwing a sandbox away
 
-A sandbox accumulates one thing that exists nowhere else: its **Thalamus**, the
-notes the agent kept across sessions. Removing the volume deletes it silently, so
-the command that destroys a sandbox is the command that rescues it first:
+A sandbox accumulates one thing that exists nowhere else: its **Thalamus** — what
+the agent wrote down as it worked. That is useful within a single session, it is
+what a rotation recovers from if the sandbox lives long enough to rotate, and at
+the end it is the only record of how the thing actually went. A short-lived
+sandbox may never reach the second of those, and the last one still applies.
+Removing the volume deletes all of it silently, so the command that destroys a
+sandbox is the command that rescues it first:
 
 ```bash
 bash bin/recycle.sh --target <component>

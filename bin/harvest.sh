@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Rescue what exists only inside a sandbox, before anything throws it away.
 #
-# A sandbox accumulates one thing the host has no copy of: its Thalamus, the
-# notes the agent kept across sessions. Removing the volume deletes it, and the
-# loss is silent — which is exactly the shape of mistake worth spending twenty
-# lines to make impossible.
+# A sandbox accumulates one thing the host has no copy of: its Thalamus — what
+# the agent wrote down as it worked. Useful within one session, recovered from
+# on rotation if it lives that long, and at the end the only record of how the
+# thing actually went. Removing the volume deletes it, and the loss is silent —
+# exactly the shape of mistake worth spending twenty lines to make impossible.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"

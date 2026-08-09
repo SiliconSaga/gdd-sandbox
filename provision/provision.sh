@@ -180,7 +180,13 @@ fi
 # waiting for a reader that never comes. Provisioning is the container's
 # entrypoint, so that hangs before the agent ever starts — no message anywhere,
 # which is the exact failure this whole change set exists to remove.
-if [ -e "$WS/Thalamus.md" ] && [ ! -f "$WS/Thalamus.md" ]; then
+# `-L` as well as `-e`: `-e` follows the link and is FALSE for a dangling one, so
+# a broken symlink slips past this guard entirely. Measured, rather than assumed:
+# it does NOT currently write through — `cp -n` skips and noclobber refuses, so
+# the run ends on the generic "could not create" error instead. What this buys is
+# the accurate diagnosis at the right moment, and a guard that still holds if the
+# noclobber below is ever relaxed; a plain redirect DOES create the link's target.
+if { [ -e "$WS/Thalamus.md" ] || [ -L "$WS/Thalamus.md" ]; } && [ ! -f "$WS/Thalamus.md" ]; then
   echo "provision: ERROR $WS/Thalamus.md exists but is not a regular file" >&2
   exit 1
 fi

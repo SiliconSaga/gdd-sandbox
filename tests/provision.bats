@@ -171,6 +171,10 @@ setup() {
   run cat "$GDD_BRIEFING_PATH"
   [[ "$output" == *"ws exec ken-site"* ]]
   [[ "$output" == *"One command per call"* ]]
+  # ...and which to reach for FIRST. Without this, the briefing teaches ws exec
+  # as the way in, and wrapping a wrapped verb (ws exec … git commit) is refused.
+  [[ "$output" == *"Reach for the dedicated verb first"* ]]
+  [[ "$output" == *"ws commit ken-site"* ]]
 }
 
 @test "the briefing points at the target's own documentation" {
@@ -260,6 +264,18 @@ setup() {
   [ "$status" -ne 0 ]
   [ "$status" -ne 124 ]   # 124 is the timeout — i.e. it blocked, which is the bug
   [[ "$output" == *"not a regular file"* ]]
+}
+
+@test "a dangling symlink in the Thalamus path is refused" {
+  # -e follows the link and is false when the target is missing, so a broken
+  # link reads as "no file here" — and the seeding would then write THROUGH it,
+  # creating the target wherever it happens to point.
+  ln -s "$BATS_TEST_TMPDIR/nowhere.md" "$GDD_WORKSPACE/Thalamus.md" 2>/dev/null \
+    || skip "symlink creation unsupported here"
+  run bash provision/provision.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not a regular file"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/nowhere.md" ]
 }
 
 @test "provision never overwrites a Thalamus that already has notes in it" {

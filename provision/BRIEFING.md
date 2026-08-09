@@ -42,8 +42,23 @@ on, which is worth more than inferring it from the file tree.
 composed commands, and the refusal is not negotiable — it exists so every command
 can be checked on its own.
 
-To work inside the component, use `ws exec`, which does the same job in a single
-command:
+**Reach for the dedicated verb first.** Most of what you need has one, and it
+does more than the raw command: `ws commit` writes the attribution trailer and
+stages from your bodyfile, `ws push` picks the right remote, `ws cr` fills in the
+change template. Wrapping those in `ws exec` skips exactly what they are for, so
+`ws exec __TARGET__ git commit …` is refused — not as a technicality, but because
+the result would be a commit missing the things that make it reviewable.
+
+| To do this | Use |
+|---|---|
+| Commit | `ws commit __TARGET__ <bodyfile>` |
+| Push a branch | `ws push __TARGET__` |
+| Open a pull request | `ws cr __TARGET__ "<title>" <bodyfile>` |
+| Run the tests | `ws test __TARGET__` |
+| See what changed | `ws status`, `ws log __TARGET__` |
+
+For everything with no verb of its own — creating a branch, checking status,
+building the site — use `ws exec`, which runs one command inside the component:
 
 ```bash
 ws exec __TARGET__ git checkout -b <branch>
