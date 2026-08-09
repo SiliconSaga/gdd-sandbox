@@ -10,6 +10,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 WS_ROOT="$(cd "$ROOT/../.." && pwd)"
+# shellcheck source=bin/lib.sh
+. "$HERE/lib.sh"
 
 TARGET="" NAME="" FORCE=0
 # `set -u` turns a value-less --target into an unbound-variable trace rather than
@@ -65,7 +67,22 @@ fi
 mkdir -p "$dest_dir"
 dest="$dest_dir/$TARGET-$(date +%F).md"
 
-ws docker cp "$NAME:/work/ws/Thalamus.md" "$dest"
+# Nothing to rescue is not a failure. A sandbox provisioned before the Thalamus
+# was seeded — or one that never finished provisioning — has no notes, and
+# refusing to recycle it would leave the operator unable to use this tool at all
+# on the very containers most likely to be thrown away. Say so and continue: the
+# guard that matters is the uncommitted-work one above.
+if ! ws docker exec "$NAME" test -f /work/ws/Thalamus.md 2>/dev/null; then
+  echo "harvest: no Thalamus in $NAME — nothing to rescue."
+  exit 0
+fi
+
+# The destination is a HOST path handed to docker, so it needs the same
+# conversion run.sh does for its env-file. Without it an MSYS path arrives as
+# `D:\d\Dev\…` — the drive letter prepended to a path that already had one — and
+# docker rejects a directory that very much exists. Unit tests stub `ws`, so this
+# only ever shows up on a real invocation.
+ws docker cp "$NAME:/work/ws/Thalamus.md" "$(ws_host_path "$dest")"
 echo "harvested: $dest"
 echo
 echo "Record this in your own Thalamus — tooling moves the file, you decide what it means:"

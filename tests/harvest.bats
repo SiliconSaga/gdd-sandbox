@@ -38,6 +38,24 @@ esac'
   [ "$status" -eq 0 ]
 }
 
+@test "a sandbox with no Thalamus is still recyclable" {
+  # Found on first real use: the container in front of us predated the seeding,
+  # so it had no notes — and refusing left the tool unable to recycle exactly the
+  # containers most likely to be thrown away. Nothing to rescue is not a failure.
+  make_stub ws 'case "$*" in
+  *"status --porcelain"*) : ;;
+  *"test -f /work/ws/Thalamus.md"*) exit 1 ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nothing to rescue"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" != *"docker cp"* ]]
+  [[ "$output" == *"docker stop gdd-sandbox-ken-site"* ]]
+}
+
 @test "harvest copies the Thalamus beside the host's own hoard" {
   bash bin/harvest.sh --target ken-site
   run cat "$STUB_LOG"
