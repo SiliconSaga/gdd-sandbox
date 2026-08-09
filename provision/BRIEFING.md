@@ -29,8 +29,54 @@ skills you can use. After a deliberate session rotation this is also how you
 recover context: the Thalamus carries what matters, so a fresh session is a
 normal event, not a loss.
 
-Then look at the target component before answering questions about it — its
-README, its structure, and any docs it carries.
+Then read the target's own documentation before you change anything: its
+`AGENTS.md` if it has one, then its `README.md`. Only this workspace's `AGENTS.md`
+and `CLAUDE.md` load by themselves, because your session starts at the workspace
+root — the component's own docs are the project-specific half and you have to
+open them deliberately. They are where a project says how it wants to be worked
+on, which is worth more than inferring it from the file tree.
+
+## Running commands
+
+**One command per call. Never `cd`, `&&`, `;` or a pipe.** This workspace refuses
+composed commands, and the refusal is not negotiable — it exists so every command
+can be checked on its own.
+
+**Reach for the dedicated verb first.** Most of what you need has one, and it
+does more than the raw command: `ws commit` writes the attribution trailer and
+stages from your bodyfile, `ws push` picks the right remote, `ws cr` fills in the
+change template. Wrapping those in `ws exec` skips exactly what they are for, so
+`ws exec __TARGET__ git commit …` is refused — not as a technicality, but because
+the result would be a commit missing the things that make it reviewable.
+
+| To do this | Use |
+|---|---|
+| Commit | `ws commit __TARGET__ <bodyfile>` |
+| Push a branch | `ws push __TARGET__` |
+| Open a pull request | `ws cr __TARGET__ "<title>" <bodyfile>` |
+| Run the tests | `ws test __TARGET__` |
+| See what changed | `ws status`, `ws log __TARGET__` |
+
+For everything with no verb of its own — creating a branch, checking status,
+building the site — use `ws exec`, which runs one command inside the component:
+
+```bash
+ws exec __TARGET__ git checkout -b <branch>
+ws exec __TARGET__ git status --short
+ws exec __TARGET__ bundle exec jekyll build
+```
+
+Not `cd components/__TARGET__; git status`. That is the habit to unlearn here;
+`ws exec` is the same action in the form this workspace accepts.
+
+**Reach for `Read`, `Glob` and `Grep` before shelling out at all.** They are
+direct, they take no shell syntax, and searching this project is what you will do
+most — `Grep` for a phrase across every page beats any command you could compose.
+
+When you do need a command, narrow it with its own flags rather than a pipe:
+`ws exec __TARGET__ git log -3`, `ws exec __TARGET__ git diff --stat`. Note that
+the tools and commands named in this briefing are the ones pre-approved for you;
+something else may work, but it may also stop and ask a person who cannot answer.
 
 ## Say where you are, in stages
 
@@ -167,6 +213,29 @@ person whose name is on the published result, deserves to see where it came from
 Write the requester as **plain text, never as `@name`**. They are a chat identity;
 the same name on the code host may belong to an unrelated person, and mentioning
 them would drag a stranger into someone else's project.
+
+## When a tool is refused
+
+Some commands are refused by this workspace's rules. That is normal and it is not
+an error on your part — but it is a fork in the road, and at it
+**you must never end your turn in silence.**
+
+1. **Try the compliant form once.** Composed command refused → split it into
+   separate calls, or run the part that matters as `ws exec __TARGET__
+   <command>`. Do not resend the composed command: it will be refused again for
+   the same reason. Pipe refused → use the command's own flag. Reading a file →
+   use `Read`, not a shell command.
+2. **If that is refused too, stop trying.** Do not go looking for a way around
+   the rule: not another shell spelling, not a different tool to do the same
+   thing, not a workaround you would have to justify later. The rule is there on
+   purpose and the person who can change it is not in this conversation.
+3. **Then say so — to both audiences.** Tell the person plainly that you have hit
+   something on your end and what it means for their request. Send the operator
+   the exact command and the exact refusal.
+
+Stopping is a perfectly good outcome. Stopping without telling anyone is the one
+that leaves someone watching a chat window for an answer that is never coming —
+and it looks identical, from outside, to an agent that is still working.
 
 ## When you are blocked: two audiences, two messages
 

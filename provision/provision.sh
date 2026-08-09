@@ -158,6 +158,69 @@ if [ -n "${GDD_BRIEFING_EXTRA:-}" ]; then
     >> "$briefing_path"
   echo "provision: appended the operator's briefing notes"
 fi
+# Give the workspace a Thalamus, if it has none yet.
+#
+# Rotation is safe *because* the durable notes carry what matters — that is the
+# whole argument for shedding context deliberately. It was resting on a file that
+# did not exist: the briefing promised a persistent Thalamus and nothing ever
+# created one, so every rotation started from zero and each session rediscovered
+# the same friction. Seeded EMPTY, from the workspace's own template: this is the
+# agent's memory, not a place to put instructions. Never overwritten — by the
+# second start there may be notes in it worth more than the template.
+# Falls back to the image's own copy: on a workspace seeded before this existed,
+# the volume is kept and the seed copy is skipped, so the workspace template may
+# be missing or stale — and an already-running sandbox is exactly the case that
+# needs a Thalamus most, since it has been accumulating sessions without one.
+# `cp -n` rather than a bare cp: the check and the copy are separate steps, and
+# the file being seeded is the one thing here that must never be clobbered. If a
+# session created it in between, no-clobber leaves those notes alone.
+# Something that is not a regular file standing in that path is refused before
+# any write is attempted. A FIFO is the one that matters: `-f` is false for it,
+# so both guards below think the file is missing, and the write then BLOCKS
+# waiting for a reader that never comes. Provisioning is the container's
+# entrypoint, so that hangs before the agent ever starts — no message anywhere,
+# which is the exact failure this whole change set exists to remove.
+# `-L` as well as `-e`: `-e` follows the link and is FALSE for a dangling one, so
+# a broken symlink slips past this guard entirely. Measured, rather than assumed:
+# it does NOT currently write through — `cp -n` skips and noclobber refuses, so
+# the run ends on the generic "could not create" error instead. What this buys is
+# the accurate diagnosis at the right moment, and a guard that still holds if the
+# noclobber below is ever relaxed; a plain redirect DOES create the link's target.
+if { [ -e "$WS/Thalamus.md" ] || [ -L "$WS/Thalamus.md" ]; } && [ ! -f "$WS/Thalamus.md" ]; then
+  echo "provision: ERROR $WS/Thalamus.md exists but is not a regular file" >&2
+  exit 1
+fi
+if [ ! -f "$WS/Thalamus.md" ]; then
+  for tpl in "$WS/templates/thalamus.md" "$SEED/templates/thalamus.md"; do
+    if [ -f "$tpl" ]; then
+      cp -n "$tpl" "$WS/Thalamus.md"
+      echo "provision: seeded an empty Thalamus"
+      break
+    fi
+  done
+fi
+# Still nothing? Write a minimal one and say so. The rest of the design assumes
+# this file exists — rotation recovers from it — so an absent template must not
+# quietly reproduce the hole this block was added to close.
+# noclobber, for the same reason the copy above is -n: `>` truncates, and this
+# runs on every start. A session that created the file between the check and the
+# write would have its notes replaced by an empty template.
+if [ ! -f "$WS/Thalamus.md" ]; then
+  if (
+    set -o noclobber
+    printf -- '---\nlast_session: unset\nstaleness_days: 14\n---\n\n# Thalamus\n\n## Observations\n\n## Concerns\n' \
+      > "$WS/Thalamus.md"
+  ); then
+    echo "provision: WARNING no thalamus template found; wrote a minimal Thalamus" >&2
+  elif [ ! -f "$WS/Thalamus.md" ]; then
+    # noclobber failing because the file appeared is fine — that is the race this
+    # guards. Failing with still no file is not: provisioning would report
+    # success while leaving exactly the gap this block exists to close.
+    echo "provision: ERROR could not create $WS/Thalamus.md" >&2
+    exit 1
+  fi
+fi
+
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"
 
 # 5. Report whether the upstream quirks we work around still look the same.

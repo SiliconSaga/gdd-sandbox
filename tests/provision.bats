@@ -162,6 +162,134 @@ setup() {
   [[ "$output" == *"TBD"* ]]
 }
 
+@test "the briefing says how to run a command inside the target" {
+  # The gap that stalled a cold session: it knew ws exec existed (it had run
+  # ws orient and read the survey) and still reached for `cd <dir>; git ...`.
+  # Knowing a verb exists is weaker than being told which one to use.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"ws exec ken-site"* ]]
+  [[ "$output" == *"One command per call"* ]]
+  # ...and which to reach for FIRST. Without this, the briefing teaches ws exec
+  # as the way in, and wrapping a wrapped verb (ws exec … git commit) is refused.
+  [[ "$output" == *"Reach for the dedicated verb first"* ]]
+  [[ "$output" == *"ws commit ken-site"* ]]
+}
+
+@test "the briefing points at the target's own documentation" {
+  # Only the workspace AGENTS.md/CLAUDE.md load automatically, because the session
+  # starts at the workspace root. A component's own docs are the project-specific
+  # half and have to be opened deliberately.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  # Not a bare "AGENTS.md": that string already appears in the sentence about the
+  # WORKSPACE's documents, so the test would keep passing with this instruction
+  # deleted — an assertion about the wrong sentence.
+  [[ "$output" == *"Then read the target's own documentation"* ]]
+  [[ "$output" == *"README.md"* ]]
+}
+
+@test "the briefing forbids going quiet when a tool is refused" {
+  # What actually broke: a denied command ended the turn with no message to
+  # anyone. Stopping is allowed; stopping in silence is not.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"refused"* ]]
+  [[ "$output" == *"never end your turn in silence"* ]]
+  # The whole ladder, not just its headline: one compliant retry, then stop, then
+  # report to both audiences. Any one of those going missing changes the outcome.
+  [[ "$output" == *"Try the compliant form once"* ]]
+  [[ "$output" == *"If that is refused too, stop trying"* ]]
+  [[ "$output" == *"the exact command and the exact refusal"* ]]
+}
+
+@test "provision seeds a Thalamus so rotation has notes to come back to" {
+  # Rotation is documented as safe *because* durable notes carry the state. There
+  # were none: the briefing promised a Thalamus and the file did not exist, so
+  # every rotation started from zero.
+  mkdir -p "$GDD_SEED/templates"
+  printf -- '---\nlast_session: unset\n---\n\n# Thalamus\n' > "$GDD_SEED/templates/thalamus.md"
+  bash provision/provision.sh
+  # Byte-identical to the template: "a file exists" would also pass if
+  # provisioning wrote something unrelated there.
+  run cmp -s "$GDD_SEED/templates/thalamus.md" "$GDD_WORKSPACE/Thalamus.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "an already-seeded workspace still gets a Thalamus" {
+  # The case that actually needs it: a sandbox whose volume predates this, so the
+  # seed copy is skipped entirely. Nothing under the workspace can be relied on
+  # here, so the image's own template is the fallback.
+  mkdir -p "$GDD_SEED/templates" "$GDD_WORKSPACE/.git"
+  printf -- '---\nlast_session: unset\n---\n' > "$GDD_SEED/templates/thalamus.md"
+  bash provision/provision.sh
+  run cmp -s "$GDD_SEED/templates/thalamus.md" "$GDD_WORKSPACE/Thalamus.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "no template at all still leaves a Thalamus, and says so" {
+  # The rest of the design assumes this file exists — rotation recovers from it —
+  # so a missing template must not quietly reproduce the hole this closes.
+  run bash provision/provision.sh
+  [ "$status" -eq 0 ]
+  # The warning is the operator-facing half — without asserting it, it could be
+  # deleted and this test would still pass on the file alone.
+  [[ "$output" == *"WARNING no thalamus template found"* ]]
+  [ -f "$GDD_WORKSPACE/Thalamus.md" ]
+  run cat "$GDD_WORKSPACE/Thalamus.md"
+  [[ "$output" == *"# Thalamus"* ]]
+}
+
+@test "a Thalamus that cannot be created fails provisioning loudly" {
+  # A directory standing where the file belongs: the write cannot succeed and no
+  # file appears. Reporting success there would leave the sandbox running with
+  # the exact gap this block was added to close, which is worse than not trying.
+  mkdir -p "$GDD_WORKSPACE/Thalamus.md"
+  run bash provision/provision.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR"* ]]
+  [[ "$output" == *"Thalamus.md"* ]]
+}
+
+@test "a FIFO in the Thalamus path is refused, not written to" {
+  # The dangerous one: -f is false for a FIFO, so both guards read the file as
+  # missing, and the write then blocks for a reader that never arrives. That
+  # hangs the container's entrypoint before the agent starts — silence with no
+  # message anywhere, which is worse than any error.
+  mkfifo "$GDD_WORKSPACE/Thalamus.md" 2>/dev/null || skip "mkfifo unsupported here"
+  run timeout 20 bash provision/provision.sh
+  [ "$status" -ne 0 ]
+  [ "$status" -ne 124 ]   # 124 is the timeout — i.e. it blocked, which is the bug
+  [[ "$output" == *"not a regular file"* ]]
+}
+
+@test "a dangling symlink in the Thalamus path is refused" {
+  # -e follows the link and is false when the target is missing, so a broken
+  # link reads as "no file here" — and the seeding would then write THROUGH it,
+  # creating the target wherever it happens to point.
+  ln -s "$BATS_TEST_TMPDIR/nowhere.md" "$GDD_WORKSPACE/Thalamus.md" 2>/dev/null \
+    || skip "symlink creation unsupported here"
+  run bash provision/provision.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not a regular file"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/nowhere.md" ]
+}
+
+@test "provision never overwrites a Thalamus that already has notes in it" {
+  # It is the agent's memory across restarts; provisioning runs on every start.
+  mkdir -p "$GDD_SEED/templates" "$GDD_WORKSPACE"
+  printf -- '---\nlast_session: unset\n---\n' > "$GDD_SEED/templates/thalamus.md"
+  printf 'hard-won observation\n' > "$GDD_WORKSPACE/Thalamus.md"
+  bash provision/provision.sh
+  run cat "$GDD_WORKSPACE/Thalamus.md"
+  # Exactly the note, nothing appended around it: a substring check would pass
+  # while provisioning quietly stapled the template onto the agent's memory.
+  [ "$output" = "hard-won observation" ]
+}
+
 @test "provision tells the agent where to send technical detail" {
   # That direct message is the only alert this sandbox has — nobody is watching a
   # dashboard, so losing it means the first sign of trouble is a person waiting.
