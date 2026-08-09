@@ -171,14 +171,25 @@ fi
 # the volume is kept and the seed copy is skipped, so the workspace template may
 # be missing or stale — and an already-running sandbox is exactly the case that
 # needs a Thalamus most, since it has been accumulating sessions without one.
+# `cp -n` rather than a bare cp: the check and the copy are separate steps, and
+# the file being seeded is the one thing here that must never be clobbered. If a
+# session created it in between, no-clobber leaves those notes alone.
 if [ ! -f "$WS/Thalamus.md" ]; then
   for tpl in "$WS/templates/thalamus.md" "$SEED/templates/thalamus.md"; do
     if [ -f "$tpl" ]; then
-      cp "$tpl" "$WS/Thalamus.md"
+      cp -n "$tpl" "$WS/Thalamus.md"
       echo "provision: seeded an empty Thalamus"
       break
     fi
   done
+fi
+# Still nothing? Write a minimal one and say so. The rest of the design assumes
+# this file exists — rotation recovers from it — so an absent template must not
+# quietly reproduce the hole this block was added to close.
+if [ ! -f "$WS/Thalamus.md" ]; then
+  printf -- '---\nlast_session: unset\nstaleness_days: 14\n---\n\n# Thalamus\n\n## Observations\n\n## Concerns\n' \
+    > "$WS/Thalamus.md"
+  echo "provision: WARNING no thalamus template found; wrote a minimal Thalamus" >&2
 fi
 
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"

@@ -76,6 +76,72 @@ esac'
   [[ "$output" == *"volume rm gdd-sandbox-ken-site-ws gdd-sandbox-ken-site-ws-claude"* ]]
 }
 
+@test "a status check that fails is not read as a clean repository" {
+  # Failing open here fails in the direction that destroys: an unreachable
+  # container returns nothing, nothing looks clean, and recycle proceeds to
+  # delete the volume the notes were on.
+  make_stub ws 'case "$*" in
+  *"status --porcelain"*) echo "Error: No such container" >&2; exit 1 ;;
+  "hoard thalamus-path") echo "/tmp/hoard/host-thalamus.md" ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot inspect"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" != *"docker stop"* ]]
+  [[ "$output" != *"volume rm"* ]]
+}
+
+@test "recycle reports failure when the container will not go away" {
+  # Printing "recycled" over a container that is still running is the kind of
+  # false assurance that gets discovered a week later.
+  make_stub ws 'case "$*" in
+  *"status --porcelain"*) : ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *"docker rm"*) echo "Error response from daemon: cannot remove container" >&2; exit 1 ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"has NOT been removed"* ]]
+  [[ "$output" != *"recycled:"* ]]
+}
+
+@test "an already-removed container does not fail the recycle" {
+  # Idempotence: "no such container" means the work is done, not that it broke.
+  make_stub ws 'case "$*" in
+  *"status --porcelain"*) : ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *"docker stop"*) echo "Error: No such container: gdd-sandbox-ken-site" >&2; exit 1 ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recycled:"* ]]
+}
+
+@test "recycle passes force through to the harvest" {
+  make_stub ws 'case "$*" in
+  *"status --porcelain"*) echo " M index.html" ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site --force
+  [ "$status" -eq 0 ]
+  run cat "$STUB_LOG"
+  harvested="${output%%docker stop*}"
+  [[ "$harvested" == *"docker cp gdd-sandbox-ken-site:/work/ws/Thalamus.md"* ]]
+  [[ "$output" == *"volume rm"* ]]
+}
+
+@test "an option given no value fails with an argument error" {
+  run bash bin/harvest.sh --target
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"needs a value"* ]]
+  [[ "$output" != *"unbound variable"* ]]
+}
+
 @test "recycle destroys nothing when the harvest refuses" {
   # The whole point of pairing them: the command that throws the sandbox away is
   # the one that rescues it first, so a hurry cannot skip the rescue.

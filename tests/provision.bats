@@ -226,6 +226,15 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "no template at all still leaves a Thalamus, and says so" {
+  # The rest of the design assumes this file exists — rotation recovers from it —
+  # so a missing template must not quietly reproduce the hole this closes.
+  bash provision/provision.sh
+  [ -f "$GDD_WORKSPACE/Thalamus.md" ]
+  run cat "$GDD_WORKSPACE/Thalamus.md"
+  [[ "$output" == *"# Thalamus"* ]]
+}
+
 @test "provision never overwrites a Thalamus that already has notes in it" {
   # It is the agent's memory across restarts; provisioning runs on every start.
   mkdir -p "$GDD_SEED/templates" "$GDD_WORKSPACE"

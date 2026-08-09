@@ -11,10 +11,13 @@ ROOT="$(cd "$HERE/.." && pwd)"
 WS_ROOT="$(cd "$ROOT/../.." && pwd)"
 
 TARGET="" NAME="" FORCE=0
+# `set -u` turns a value-less --target into an unbound-variable trace rather than
+# the argument error the script is meant to give, so check before expanding $2.
+need_value() { [ "$1" -ge 2 ] || { echo "error: $2 needs a value" >&2; exit 2; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --target) TARGET="$2"; shift 2 ;;
-    --name) NAME="$2"; shift 2 ;;
+    --target) need_value "$#" "$1"; TARGET="$2"; shift 2 ;;
+    --name) need_value "$#" "$1"; NAME="$2"; shift 2 ;;
     --force) FORCE=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -29,7 +32,16 @@ NAME="${NAME:-gdd-sandbox-$TARGET}"
 # reviews. It has a proper home — a branch and a pull request, opened by the agent
 # while the sandbox is still alive — and the only way to make that the default is
 # to refuse the shortcut. `--force` is for work already judged disposable.
-dirty="$(ws docker exec "$NAME" git -C "/work/ws/components/$TARGET" status --porcelain 2>/dev/null || true)"
+#
+# A failed status call must NOT read as "clean". Silencing it would turn a
+# stopped container or a wrong path into an empty result, and the empty result is
+# the one that lets recycle.sh go on to delete everything — the check would fail
+# open, in the direction that destroys.
+if ! dirty="$(ws docker exec "$NAME" git -C "/work/ws/components/$TARGET" status --porcelain)"; then
+  echo "error: cannot inspect $TARGET inside $NAME — refusing to harvest." >&2
+  echo "Is the container running? 'ws docker ps' to check." >&2
+  exit 1
+fi
 if [ -n "$dirty" ] && [ "$FORCE" -ne 1 ]; then
   echo "error: $TARGET has uncommitted work in the sandbox:" >&2
   printf '%s\n' "$dirty" >&2

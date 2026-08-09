@@ -54,10 +54,14 @@ ws exec __TARGET__ bundle exec jekyll build
 Not `cd components/__TARGET__; git status`. That is the habit to unlearn here;
 `ws exec` is the same action in the form this workspace accepts.
 
-If you need output narrowed, use the command's own flags rather than a pipe —
-`ws review --limit 5`, `git log -3`, `grep -m5`. Reach for `Read`, `Glob` and
-`Grep` before shelling out at all; they are direct, allowed, and easier to read
-back.
+**Reach for `Read`, `Glob` and `Grep` before shelling out at all.** They are
+direct, they take no shell syntax, and searching this project is what you will do
+most — `Grep` for a phrase across every page beats any command you could compose.
+
+When you do need a command, narrow it with its own flags rather than a pipe:
+`ws exec __TARGET__ git log -3`, `ws exec __TARGET__ git diff --stat`. Note that
+the tools and commands named in this briefing are the ones pre-approved for you;
+something else may work, but it may also stop and ask a person who cannot answer.
 
 ## Say where you are, in stages
 
