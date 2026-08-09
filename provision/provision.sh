@@ -196,6 +196,12 @@ if [ ! -f "$WS/Thalamus.md" ]; then
       > "$WS/Thalamus.md"
   ); then
     echo "provision: WARNING no thalamus template found; wrote a minimal Thalamus" >&2
+  elif [ ! -f "$WS/Thalamus.md" ]; then
+    # noclobber failing because the file appeared is fine — that is the race this
+    # guards. Failing with still no file is not: provisioning would report
+    # success while leaving exactly the gap this block exists to close.
+    echo "provision: ERROR could not create $WS/Thalamus.md" >&2
+    exit 1
   fi
 fi
 

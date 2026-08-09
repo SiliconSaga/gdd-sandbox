@@ -239,6 +239,16 @@ setup() {
   [[ "$output" == *"# Thalamus"* ]]
 }
 
+@test "a Thalamus that cannot be created fails provisioning loudly" {
+  # A directory standing where the file belongs: the write cannot succeed and no
+  # file appears. Reporting success there would leave the sandbox running with
+  # the exact gap this block was added to close, which is worse than not trying.
+  mkdir -p "$GDD_WORKSPACE/Thalamus.md"
+  run bash provision/provision.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR could not create"* ]]
+}
+
 @test "provision never overwrites a Thalamus that already has notes in it" {
   # It is the agent's memory across restarts; provisioning runs on every start.
   mkdir -p "$GDD_SEED/templates" "$GDD_WORKSPACE"

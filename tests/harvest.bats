@@ -73,8 +73,10 @@ esac'
   [[ "$harvested" == *"docker cp gdd-sandbox-ken-site:/work/ws/Thalamus.md"* ]]
   [[ "$output" == *"docker stop gdd-sandbox-ken-site"* ]]
   [[ "$output" == *"docker rm gdd-sandbox-ken-site"* ]]
-  [[ "$output" == *"volume rm gdd-sandbox-ken-site-ws"* ]]
-  [[ "$output" == *"volume rm gdd-sandbox-ken-site-ws-claude"* ]]
+  # Whole lines: a substring match on the workspace volume also matches inside
+  # the -claude name, so it would pass with that call missing entirely.
+  grep -Fxq "ws docker volume rm gdd-sandbox-ken-site-ws" "$STUB_LOG"
+  grep -Fxq "ws docker volume rm gdd-sandbox-ken-site-ws-claude" "$STUB_LOG"
 }
 
 @test "a status check that fails is not read as a clean repository" {
@@ -137,6 +139,12 @@ esac'
   [ "$status" -ne 0 ]
   [[ "$output" == *"has NOT been removed"* ]]
   [[ "$output" != *"recycled:"* ]]
+  # Specifically the SECOND volume's failure — a non-zero status alone would
+  # also be satisfied by aborting on the first, absent one, which is the
+  # tolerated case and would mean this test never reached the masking scenario.
+  [[ "$output" == *"volume is in use"* ]]
+  grep -Fxq "ws docker volume rm gdd-sandbox-ken-site-ws" "$STUB_LOG"
+  grep -Fxq "ws docker volume rm gdd-sandbox-ken-site-ws-claude" "$STUB_LOG"
 }
 
 @test "recycle passes force through to the harvest" {
