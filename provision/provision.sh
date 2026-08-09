@@ -174,6 +174,16 @@ fi
 # `cp -n` rather than a bare cp: the check and the copy are separate steps, and
 # the file being seeded is the one thing here that must never be clobbered. If a
 # session created it in between, no-clobber leaves those notes alone.
+# Something that is not a regular file standing in that path is refused before
+# any write is attempted. A FIFO is the one that matters: `-f` is false for it,
+# so both guards below think the file is missing, and the write then BLOCKS
+# waiting for a reader that never comes. Provisioning is the container's
+# entrypoint, so that hangs before the agent ever starts — no message anywhere,
+# which is the exact failure this whole change set exists to remove.
+if [ -e "$WS/Thalamus.md" ] && [ ! -f "$WS/Thalamus.md" ]; then
+  echo "provision: ERROR $WS/Thalamus.md exists but is not a regular file" >&2
+  exit 1
+fi
 if [ ! -f "$WS/Thalamus.md" ]; then
   for tpl in "$WS/templates/thalamus.md" "$SEED/templates/thalamus.md"; do
     if [ -f "$tpl" ]; then

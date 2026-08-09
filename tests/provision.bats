@@ -246,7 +246,20 @@ setup() {
   mkdir -p "$GDD_WORKSPACE/Thalamus.md"
   run bash provision/provision.sh
   [ "$status" -ne 0 ]
-  [[ "$output" == *"ERROR could not create"* ]]
+  [[ "$output" == *"ERROR"* ]]
+  [[ "$output" == *"Thalamus.md"* ]]
+}
+
+@test "a FIFO in the Thalamus path is refused, not written to" {
+  # The dangerous one: -f is false for a FIFO, so both guards read the file as
+  # missing, and the write then blocks for a reader that never arrives. That
+  # hangs the container's entrypoint before the agent starts — silence with no
+  # message anywhere, which is worse than any error.
+  mkfifo "$GDD_WORKSPACE/Thalamus.md" 2>/dev/null || skip "mkfifo unsupported here"
+  run timeout 20 bash provision/provision.sh
+  [ "$status" -ne 0 ]
+  [ "$status" -ne 124 ]   # 124 is the timeout — i.e. it blocked, which is the bug
+  [[ "$output" == *"not a regular file"* ]]
 }
 
 @test "provision never overwrites a Thalamus that already has notes in it" {
