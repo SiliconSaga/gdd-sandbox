@@ -229,7 +229,11 @@ setup() {
 @test "no template at all still leaves a Thalamus, and says so" {
   # The rest of the design assumes this file exists — rotation recovers from it —
   # so a missing template must not quietly reproduce the hole this closes.
-  bash provision/provision.sh
+  run bash provision/provision.sh
+  [ "$status" -eq 0 ]
+  # The warning is the operator-facing half — without asserting it, it could be
+  # deleted and this test would still pass on the file alone.
+  [[ "$output" == *"WARNING no thalamus template found"* ]]
   [ -f "$GDD_WORKSPACE/Thalamus.md" ]
   run cat "$GDD_WORKSPACE/Thalamus.md"
   [[ "$output" == *"# Thalamus"* ]]

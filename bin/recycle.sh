@@ -50,5 +50,10 @@ docker_step() {
 
 docker_step ws docker stop "$NAME"
 docker_step ws docker rm "$NAME"
-docker_step ws docker volume rm "gdd-sandbox-$TARGET-ws" "gdd-sandbox-$TARGET-ws-claude"
+# One volume per call. Removing both at once merges their output, so an absent
+# first volume supplies the "no such volume" that makes a real failure on the
+# second look tolerable — and the script would report success over a volume that
+# is still there.
+docker_step ws docker volume rm "gdd-sandbox-$TARGET-ws"
+docker_step ws docker volume rm "gdd-sandbox-$TARGET-ws-claude"
 echo "recycled: $NAME and its volumes are gone"

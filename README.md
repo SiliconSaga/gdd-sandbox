@@ -149,8 +149,12 @@ The notes land beside your own thalami hoard if one is active (in its own
 `sandboxes/` directory, kept separable — a tenant who graduates to their own plan
 should be able to take their memory with them), or in the workspace `.tmp/`
 otherwise. The script then prints the line to record in your own Thalamus: what
-was harvested, that it is housekeeping input next cycle, and that it should be
-deleted afterward, since a harvested file means that sandbox no longer exists.
+was harvested, and that it is housekeeping input next cycle.
+
+Delete the harvested file once you have recorded what matters *and* that sandbox
+has actually been recycled. Harvesting on its own destroys nothing — run it
+standalone and the sandbox keeps running with its notes intact, so the file is a
+copy rather than the last remaining record.
 
 **Uncommitted work in the target stops the harvest.** It has a proper home — a
 branch and a pull request the agent opens while the sandbox is still alive — and

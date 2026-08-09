@@ -73,7 +73,8 @@ esac'
   [[ "$harvested" == *"docker cp gdd-sandbox-ken-site:/work/ws/Thalamus.md"* ]]
   [[ "$output" == *"docker stop gdd-sandbox-ken-site"* ]]
   [[ "$output" == *"docker rm gdd-sandbox-ken-site"* ]]
-  [[ "$output" == *"volume rm gdd-sandbox-ken-site-ws gdd-sandbox-ken-site-ws-claude"* ]]
+  [[ "$output" == *"volume rm gdd-sandbox-ken-site-ws"* ]]
+  [[ "$output" == *"volume rm gdd-sandbox-ken-site-ws-claude"* ]]
 }
 
 @test "a status check that fails is not read as a clean repository" {
@@ -119,6 +120,23 @@ esac'
   run bash bin/recycle.sh --target ken-site
   [ "$status" -eq 0 ]
   [[ "$output" == *"recycled:"* ]]
+}
+
+@test "an absent volume cannot mask a failure removing the other one" {
+  # Removing both in one call merges their output: the absent one supplies a
+  # "no such volume" that makes the real failure look tolerable, and the script
+  # would announce success over a volume still sitting there.
+  make_stub ws 'case "$*" in
+  *"status --porcelain"*) : ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *"volume rm gdd-sandbox-ken-site-ws") echo "Error: No such volume: gdd-sandbox-ken-site-ws" >&2; exit 1 ;;
+  *"volume rm gdd-sandbox-ken-site-ws-claude") echo "Error response from daemon: volume is in use" >&2; exit 1 ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"has NOT been removed"* ]]
+  [[ "$output" != *"recycled:"* ]]
 }
 
 @test "recycle passes force through to the harvest" {

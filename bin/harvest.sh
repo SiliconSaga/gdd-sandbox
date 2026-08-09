@@ -69,4 +69,5 @@ echo "harvested: $dest"
 echo
 echo "Record this in your own Thalamus — tooling moves the file, you decide what it means:"
 echo "  - Sandbox tenant '$TARGET' harvested to $dest. Treat as housekeeping input"
-echo "    next cycle, then delete the file: its existence means that sandbox is gone."
+echo "    next cycle; delete it once its observations are recorded AND that sandbox"
+echo "    has actually been recycled — a harvest on its own destroys nothing."

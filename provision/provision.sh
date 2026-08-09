@@ -186,10 +186,17 @@ fi
 # Still nothing? Write a minimal one and say so. The rest of the design assumes
 # this file exists — rotation recovers from it — so an absent template must not
 # quietly reproduce the hole this block was added to close.
+# noclobber, for the same reason the copy above is -n: `>` truncates, and this
+# runs on every start. A session that created the file between the check and the
+# write would have its notes replaced by an empty template.
 if [ ! -f "$WS/Thalamus.md" ]; then
-  printf -- '---\nlast_session: unset\nstaleness_days: 14\n---\n\n# Thalamus\n\n## Observations\n\n## Concerns\n' \
-    > "$WS/Thalamus.md"
-  echo "provision: WARNING no thalamus template found; wrote a minimal Thalamus" >&2
+  if (
+    set -o noclobber
+    printf -- '---\nlast_session: unset\nstaleness_days: 14\n---\n\n# Thalamus\n\n## Observations\n\n## Concerns\n' \
+      > "$WS/Thalamus.md"
+  ); then
+    echo "provision: WARNING no thalamus template found; wrote a minimal Thalamus" >&2
+  fi
 fi
 
 bash "$HERE/patch-onboarding.sh" "$HOME/.claude.json" "$WS"

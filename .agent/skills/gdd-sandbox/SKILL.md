@@ -122,6 +122,10 @@ It writes the notes beside the active thalami hoard (in `sandboxes/`) or to
 tooling moves bytes, the agent decides what they mean, and a script that edits
 that file would be guessing at a structure the human owns.
 
+A harvested file is only the last remaining copy once that sandbox has been
+recycled — `harvest.sh` alone destroys nothing. Delete it after its observations
+are recorded and the sandbox is actually gone.
+
 ## Liveness
 
 Process-level only, so nothing leaks into a user's chat:
