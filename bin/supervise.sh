@@ -93,6 +93,12 @@ PROMPT_POLL="${GDD_PROMPT_POLL:-30}"
 # do. Fifteen minutes is longer than any of that and still far short of "hung
 # forever", which is what this exists to prevent.
 PROMPT_GRACE="${GDD_PROMPT_GRACE:-900}"
+# How often the progress line grows, and how long a quiet session is given before
+# the supervisor speaks for it. Ten seconds is slow enough to be cheap and fast
+# enough to look alive; two minutes of nothing, with a request still unanswered,
+# is well past any normal pause between tool calls.
+PROGRESS_POLL="${GDD_PROGRESS_POLL:-10}"
+STALL_AFTER="${GDD_STALL_AFTER:-120}"
 # Narration lives in its own script so the supervisor can speak without spending
 # tokens, and so tests can stand a stub in front of it. Resolved at call time —
 # HERE is set further down, and a default evaluated here would be an unbound
@@ -192,6 +198,59 @@ watch_prompts() {
   done
 }
 
+# Has the agent replied since the last thing it was asked?
+#
+# This is what separates "finished" from "stopped", and without it a stall
+# watchdog would announce a problem after every completed request. Both markers
+# live in the transcript: an inbound message carries a chat_id tag, and every
+# reply records the id it sent. Whichever appears LAST wins — a reply after the
+# request means answered, a request after the reply means someone is waiting.
+unanswered_request() {
+  local f last_in last_out
+  f="$(find "${GDD_TRANSCRIPT_DIR:-$HOME/.claude/projects/-work-ws}" -maxdepth 1 -name '*.jsonl' \
+        -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+  [ -n "$f" ] || return 1
+  last_in="$(grep -n 'chat_id=' "$f" 2>/dev/null | tail -1 | cut -d: -f1)"
+  last_out="$(grep -n 'sent (id:' "$f" 2>/dev/null | tail -1 | cut -d: -f1)"
+  [ -n "$last_in" ] || return 1
+  [ -n "$last_out" ] || return 0
+  [ "$last_in" -gt "$last_out" ]
+}
+
+# Narrate long work, and speak up when it stops without finishing.
+#
+# The two failures this week ended identically: the agent went quiet and the
+# person kept waiting on a reply that was never coming — once after a run of
+# refusals, once after an approval was cancelled underneath it. Nobody has to be
+# watching for this to be caught, and it costs nothing per tick because it never
+# touches the model.
+watch_progress() {
+  local last_mtime="" now_mtime="" idle=0 stalled=0 ticks=0
+  sleep "$CHANNEL_GRACE"
+  while pgrep -f 'claude .*--channels' >/dev/null; do
+    now_mtime="$(find "${GDD_TRANSCRIPT_DIR:-$HOME/.claude/projects/-work-ws}" -maxdepth 1 \
+                  -name '*.jsonl' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
+    if [ -n "$now_mtime" ] && [ "$now_mtime" != "$last_mtime" ]; then
+      # The transcript grows on every model event, so a changing file IS the
+      # session working — a far better signal than a process being alive, which
+      # stays true through every failure this design has hit.
+      last_mtime="$now_mtime"; idle=0; stalled=0
+      notify progress
+    else
+      idle=$((idle + PROGRESS_POLL))
+      if [ "$idle" -ge "$STALL_AFTER" ] && [ "$stalled" -eq 0 ] && unanswered_request; then
+        stalled=1        # once only: a watchdog that repeats every tick is worse than the silence
+        echo "supervise: session went quiet with a request unanswered" >&2
+        notify say "I've stopped before finishing what you asked, and I'm sorry — I'm not going to leave you waiting on a reply that isn't coming. The operator has been told and can pick it up."
+        notify operator "Session went quiet with an unanswered request: no reply since the last inbound message, no transcript activity for ${STALL_AFTER}s. Session is alive, so this is not a crash — check the tty log."
+      fi
+    fi
+    ticks=$((ticks + 1))
+    [ -n "${SUPERVISE_MAX_TICKS:-}" ] && [ "$ticks" -ge "$SUPERVISE_MAX_TICKS" ] && return 0
+    sleep "$PROGRESS_POLL"
+  done
+}
+
 watch_channel() {
   sleep "$CHANNEL_GRACE"
   while pgrep -f 'claude .*--channels' >/dev/null; do
@@ -214,13 +273,15 @@ launch() {
   local watcher=$!
   watch_prompts &
   local prompt_watcher=$!
+  watch_progress &
+  local progress_watcher=$!
   # -e so script returns the child's exit status; without it a failed session
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
     "claude --channels plugin:discord@claude-plugins-official $MODEL_FLAG --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
-  kill "$w" "$watcher" "$prompt_watcher" 2>/dev/null || true
+  kill "$w" "$watcher" "$prompt_watcher" "$progress_watcher" 2>/dev/null || true
   return "$rc"
 }
 

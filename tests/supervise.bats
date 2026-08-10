@@ -10,6 +10,21 @@ setup() {
   # they checked the default — the failure mode where a test passes about the
   # wrong thing.
   unset GDD_MODEL GDD_ALLOWED_TOOLS GDD_DENIED_TOOLS
+  # The supervisor can now TALK, and `ws test` loads the workspace .env — so a
+  # test that forgets to stub the notifier reaches Discord with the operator's
+  # real token and channel. That is not hypothetical: an unstubbed test sent two
+  # live DMs announcing a permission prompt that existed only in a fixture, and
+  # the give-away was its "16 minutes", which is 999/60 from a test's own knob.
+  #
+  # Both halves matter. The stub keeps assertions possible; clearing the
+  # credentials means even an unstubbed path has nothing to send with.
+  unset DISCORD_BOT_TOKEN GDD_OPERATOR_CHAT
+  cat > "$STUB_BIN/notify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "notify $*" >> "$STUB_LOG"
+EOF
+  chmod +x "$STUB_BIN/notify.sh"
+  export GDD_NOTIFY="$STUB_BIN/notify.sh"
   # 'script' is the PTY wrapper. make_stub already records the argv, so the body
   # stays empty — logging it again would double every count the tests assert on.
   make_stub script
@@ -230,12 +245,6 @@ setup() {
   # the real thing does: written by the session as it runs.
   export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
   make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
-  cat > "$STUB_BIN/notify.sh" <<'EOF'
-#!/usr/bin/env bash
-echo "notify $*" >> "$STUB_LOG"
-EOF
-  chmod +x "$STUB_BIN/notify.sh"
-  export GDD_NOTIFY="$STUB_BIN/notify.sh"
   run bash bin/supervise.sh
   run cat "$STUB_LOG"
   [[ "$output" == *"notify say"* ]]
@@ -266,16 +275,64 @@ EOF
   # the real thing does: written by the session as it runs.
   export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
   make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
-  cat > "$STUB_BIN/notify.sh" <<'EOF'
-#!/usr/bin/env bash
-echo "notify $*" >> "$STUB_LOG"
-EOF
-  chmod +x "$STUB_BIN/notify.sh"
-  export GDD_NOTIFY="$STUB_BIN/notify.sh"
   run bash bin/supervise.sh
   [[ "$output" == *"declining a prompt"* ]]
   run cat "$STUB_LOG"
   [[ "$output" == *"notify say"* ]]
+}
+
+@test "work in progress shows as a growing line, not silence" {
+  # From the outside, thinking and having died look identical. A line that grows
+  # says "still going" without spending a token or pinging anyone's phone.
+  export GDD_CHANNEL_GRACE=0 GDD_PROGRESS_POLL=0 GDD_STALL_AFTER=999
+  export GDD_TRANSCRIPT_DIR="$BATS_TEST_TMPDIR/projects"
+  mkdir -p "$GDD_TRANSCRIPT_DIR"
+  # A transcript being written to right now is what "busy" means.
+  make_stub pgrep 'echo 1234'
+  make_stub script "while : ; do date >> $GDD_TRANSCRIPT_DIR/s.jsonl; sleep 0.2; done"
+  export SUPERVISE_MAX_TICKS=3
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify progress"* ]]
+}
+
+@test "a turn that ends with the request unanswered is reported, not left quiet" {
+  # The failure twice over: the agent stopped — once after seven refusals, once
+  # after a cancelled approval — and the person kept waiting on a reply that was
+  # never coming. Nobody has to notice for this to be caught.
+  export GDD_CHANNEL_GRACE=0 GDD_PROGRESS_POLL=0 GDD_STALL_AFTER=0
+  export GDD_TRANSCRIPT_DIR="$BATS_TEST_TMPDIR/projects"
+  mkdir -p "$GDD_TRANSCRIPT_DIR"
+  # An inbound request with no reply after it, then nothing: someone asked, and
+  # the session went quiet. A transcript with no request in it is a session
+  # sitting idle between jobs, which is not a stall.
+  cat > "$GDD_TRANSCRIPT_DIR/s.jsonl" <<'JSON'
+{"type":"user","message":{"content":"<channel source=\"discord\" chat_id=\"555\">please add the photo"}}
+JSON
+  make_stub pgrep 'echo 1234'
+  make_stub script 'sleep 2'
+  export SUPERVISE_MAX_TICKS=3
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify say"* ]]
+  [[ "$output" == *"notify operator"* ]]
+}
+
+@test "a stall is announced once, not on every tick" {
+  # A watchdog that repeats itself every few seconds is a worse experience than
+  # the silence it replaced.
+  export GDD_CHANNEL_GRACE=0 GDD_PROGRESS_POLL=0 GDD_STALL_AFTER=0
+  export GDD_TRANSCRIPT_DIR="$BATS_TEST_TMPDIR/projects"
+  mkdir -p "$GDD_TRANSCRIPT_DIR"
+  cat > "$GDD_TRANSCRIPT_DIR/s.jsonl" <<'JSON'
+{"type":"user","message":{"content":"<channel source=\"discord\" chat_id=\"555\">please add the photo"}}
+JSON
+  make_stub pgrep 'echo 1234'
+  make_stub script 'sleep 2'
+  export SUPERVISE_MAX_TICKS=6
+  run timeout 20 bash bin/supervise.sh
+  run bash -c "grep -c 'notify operator' '$STUB_LOG'"
+  [ "$output" = "1" ]
 }
 
 @test "a failed --continue falls back to a fresh session" {
