@@ -6,6 +6,7 @@ setup() {
   # `ws` fronts docker and the hoard lookup, so one stub answers for both. The
   # default here is the good case: clean target, a hoard to harvest into.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) : ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *) : ;;
@@ -18,6 +19,7 @@ esac'
   # nobody reviews. It has a proper home — a branch and a pull request the sandbox
   # agent opens while it is still alive — so stop and say so.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) echo " M index.html" ;;
   "hoard thalamus-path") echo "/tmp/hoard/host-thalamus.md" ;;
   *) : ;;
@@ -30,6 +32,7 @@ esac'
 
 @test "harvest proceeds on uncommitted work when told to" {
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) echo " M index.html" ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *) : ;;
@@ -43,8 +46,8 @@ esac'
   # so it had no notes — and refusing left the tool unable to recycle exactly the
   # containers most likely to be thrown away. Nothing to rescue is not a failure.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo ABSENT ;;
   *"status --porcelain"*) : ;;
-  *"test -f /work/ws/Thalamus.md"*) exit 1 ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *) : ;;
 esac'
@@ -54,6 +57,25 @@ esac'
   run cat "$STUB_LOG"
   [[ "$output" != *"docker cp"* ]]
   [[ "$output" == *"docker stop gdd-sandbox-ken-site"* ]]
+}
+
+@test "a probe that cannot run is not read as an absent Thalamus" {
+  # "No file" and "the probe never ran" look identical through an exit status,
+  # and one of them means the notes might still be there. Guessing wrong hands
+  # recycle a green light to delete the volume — the same fail-open-toward-
+  # destruction shape as the dirty-repo check, so it refuses the same way.
+  make_stub ws 'case "$*" in
+  *Thalamus.md*) echo "Error: No such container" >&2; exit 1 ;;
+  *"status --porcelain"*) : ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not check"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" != *"docker stop"* ]]
+  [[ "$output" != *"volume rm"* ]]
 }
 
 @test "harvest copies the Thalamus beside the host's own hoard" {
@@ -67,6 +89,7 @@ esac'
 
 @test "harvest falls back to scratch when no hoard is active" {
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) : ;;
   "hoard thalamus-path") : ;;
   *) : ;;
@@ -102,6 +125,7 @@ esac'
   # container returns nothing, nothing looks clean, and recycle proceeds to
   # delete the volume the notes were on.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) echo "Error: No such container" >&2; exit 1 ;;
   "hoard thalamus-path") echo "/tmp/hoard/host-thalamus.md" ;;
   *) : ;;
@@ -118,6 +142,7 @@ esac'
   # Printing "recycled" over a container that is still running is the kind of
   # false assurance that gets discovered a week later.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) : ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *"docker rm"*) echo "Error response from daemon: cannot remove container" >&2; exit 1 ;;
@@ -132,6 +157,7 @@ esac'
 @test "an already-removed container does not fail the recycle" {
   # Idempotence: "no such container" means the work is done, not that it broke.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) : ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *"docker stop"*) echo "Error: No such container: gdd-sandbox-ken-site" >&2; exit 1 ;;
@@ -147,6 +173,7 @@ esac'
   # "no such volume" that makes the real failure look tolerable, and the script
   # would announce success over a volume still sitting there.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) : ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *"volume rm gdd-sandbox-ken-site-ws") echo "Error: No such volume: gdd-sandbox-ken-site-ws" >&2; exit 1 ;;
@@ -167,6 +194,7 @@ esac'
 
 @test "recycle passes force through to the harvest" {
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) echo " M index.html" ;;
   "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
   *) : ;;
@@ -190,6 +218,7 @@ esac'
   # The whole point of pairing them: the command that throws the sandbox away is
   # the one that rescues it first, so a hurry cannot skip the rescue.
   make_stub ws 'case "$*" in
+  *Thalamus.md*) echo PRESENT ;;
   *"status --porcelain"*) echo " M index.html" ;;
   "hoard thalamus-path") echo "/tmp/hoard/host-thalamus.md" ;;
   *) : ;;

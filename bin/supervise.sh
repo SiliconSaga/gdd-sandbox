@@ -169,11 +169,20 @@ FIFO=/tmp/claude-stdin
 # Requires the prompt to persist across two polls, so a prompt being answered by
 # some other path is not cancelled out from under it.
 watch_prompts() {
-  local last="" now="" waited=0 announced=0
+  local last="" now="" waited=0 announced=0 since=0
   sleep "$CHANNEL_GRACE"
   while pgrep -f 'claude .*--channels' >/dev/null; do
     now="$(bash "$HERE/session-log.sh" 6 "$TTY_LOG" 2>/dev/null || true)"
     if ws_prompt_pending "$now"; then
+      # Age the prompt from when it FIRST appeared, not from the last time the
+      # screen happened to look identical. The old counter only advanced while
+      # the tail was byte-for-byte unchanged, so any repaint — a spinner frame, a
+      # line of output arriving behind the dialog — reset it to zero, and a busy
+      # screen could hold a prompt open indefinitely with neither the notice nor
+      # the decline ever firing. Screen stability is still used, but only as
+      # corroboration for the decline, never as the clock.
+      [ "$since" -eq 0 ] && since="$(date +%s)"
+      waited=$(( $(date +%s) - since ))
       # Say it once, after the prompt has gone unanswered for a while. The
       # failure that prompted this: a card reached the operator's DMs while the
       # person in the channel saw only "Back shortly" and then nothing at all.
@@ -194,13 +203,12 @@ watch_prompts() {
         notify say "I couldn't get the approval I needed, so I've stopped rather than leave you waiting. The operator has the details."
         notify operator "Permission prompt went unanswered for $((PROMPT_GRACE / 60))m and was declined. The session has been unblocked but the request was not completed."
         printf '\033' > "$FIFO"     # Esc cancels, whatever the prompt's shape
-        last=""; waited=0; announced=0
+        last=""; waited=0; announced=0; since=0
       else
-        [ "$now" = "$last" ] && waited=$((waited + PROMPT_POLL)) || waited=0
         last="$now"
       fi
     else
-      last=""; waited=0; announced=0
+      last=""; waited=0; announced=0; since=0
     fi
     sleep "$PROMPT_POLL"
   done
@@ -215,11 +223,10 @@ watch_prompts() {
 # request means answered, a request after the reply means someone is waiting.
 unanswered_request() {
   local f last_in last_out
-  f="$(find "${GDD_TRANSCRIPT_DIR:-$HOME/.claude/projects/-work-ws}" -maxdepth 1 -name '*.jsonl' \
-        -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+  f="$(ws_transcript)"
   [ -n "$f" ] || return 1
-  last_in="$(grep -n 'chat_id=' "$f" 2>/dev/null | tail -1 | cut -d: -f1)"
-  last_out="$(grep -n 'sent (id:' "$f" 2>/dev/null | tail -1 | cut -d: -f1)"
+  last_in="$(ws_transcript_last_in_line "$f")"
+  last_out="$(ws_transcript_last_out_line "$f")"
   [ -n "$last_in" ] || return 1
   [ -n "$last_out" ] || return 0
   [ "$last_in" -gt "$last_out" ]
@@ -236,7 +243,7 @@ watch_progress() {
   local last_mtime="" now_mtime="" idle=0 stalled=0 ticks=0
   sleep "$CHANNEL_GRACE"
   while pgrep -f 'claude .*--channels' >/dev/null; do
-    now_mtime="$(find "${GDD_TRANSCRIPT_DIR:-$HOME/.claude/projects/-work-ws}" -maxdepth 1 \
+    now_mtime="$(find "${GDD_TRANSCRIPT_DIR:-$GDD_TRANSCRIPTS_DEFAULT}" -maxdepth 1 \
                   -name '*.jsonl' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
     if [ -n "$now_mtime" ] && [ "$now_mtime" != "$last_mtime" ]; then
       # The transcript grows on every model event, so a changing file IS the
@@ -275,6 +282,11 @@ launch() {
   local cont="$1"   # "--continue" or ""
   local rc=0
   : > "$TTY_LOG"; rm -f "$FIFO"; mkfifo "$FIFO"
+  # Forget which message the dots were growing on. The state file outlives the
+  # session — it sits in /tmp, not the transcript — so after a crash-relaunch or
+  # a rotation the ticker would keep editing a message from the conversation that
+  # just ended, which is worse than saying nothing.
+  notify reset
   sleep infinity > "$FIFO" &            # hold the FIFO open (drive prompts + no EOF)
   local w=$!
   watch_channel &

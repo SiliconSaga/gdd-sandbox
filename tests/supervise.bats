@@ -19,6 +19,11 @@ setup() {
   # Both halves matter. The stub keeps assertions possible; clearing the
   # credentials means even an unstubbed path has nothing to send with.
   unset DISCORD_BOT_TOKEN GDD_OPERATOR_CHAT
+  # Per-test tty log. Left at its default every test would read and truncate the
+  # same /tmp/channels-tty.log — shared with any sandbox running on this machine,
+  # and with the other tests. Individual tests still override it to plant a
+  # fixture; this only stops the ones that do not from touching real state.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
   cat > "$STUB_BIN/notify.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "notify $*" >> "$STUB_LOG"
@@ -40,8 +45,11 @@ EOF
   [[ "$output" == *"--append-system-prompt"* ]]
   [[ "$output" == *"ken-site"* ]]
   [[ "$output" == *"gdd-sandbox-briefing.md"* ]]
-  # The primer is embedded in a `script -c` string: newlines would break it.
-  run bash -c "grep -c '' \"$STUB_LOG\""
+  # The primer is embedded in a `script -c` string: newlines would break it, so
+  # the launch must occupy exactly one line. Counted per-stub rather than over
+  # the whole log — the supervisor legitimately calls other things now, and a
+  # bare line count would fail for reasons that have nothing to do with quoting.
+  run bash -c "grep -c '^script ' \"$STUB_LOG\""
   [ "$output" = "1" ]
 }
 
@@ -239,13 +247,22 @@ EOF
   # moment trains people to tune the channel out, which costs more than it saves.
   export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
   export GDD_PROMPT_NOTICE_AFTER=60
-  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
   make_stub pgrep 'echo 1234'
   make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
   export SUPERVISE_MAX_TICKS=2
   run timeout 20 bash bin/supervise.sh
   run cat "$STUB_LOG"
   [[ "$output" != *"notify operator"* ]]
+
+  # Positive control. On its own the assertion above passes just as happily when
+  # the fixture never lands or the watchdog never looks — proving nothing about
+  # the delay. Same setup, no delay: the notice must appear, which is what shows
+  # the absence above was a choice rather than an accident.
+  : > "$STUB_LOG"
+  export GDD_PROMPT_NOTICE_AFTER=0
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify operator"* ]]
 }
 
 @test "a pending prompt tells the person, and the operator, before anything else" {

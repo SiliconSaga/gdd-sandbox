@@ -11,9 +11,16 @@
 #   notify.sh say <text>        post a new message in the user's channel
 #   notify.sh operator <text>   direct-message the operator
 set -uo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=bin/lib.sh
+. "$HERE/lib.sh"
 API="${GDD_DISCORD_API:-https://discord.com/api/v10}"
 STATE="${GDD_PROGRESS_STATE:-/tmp/gdd-progress.state}"
-PROJECTS="${GDD_TRANSCRIPT_DIR:-$HOME/.claude/projects/-work-ws}"
+# Bounded, because this runs inside the supervisor's polling loop: a connection
+# that hangs would stall the very watchdog whose job is to notice that things
+# have stalled. Failing a tick is nothing — the next one is seconds away.
+CURL_CONNECT_TIMEOUT="${GDD_CURL_CONNECT_TIMEOUT:-5}"
+CURL_MAX_TIME="${GDD_CURL_MAX_TIME:-15}"
 # 2000 is Discord's message ceiling; stop well short. At one dot per tick this is
 # also the point where "still going" stops being informative and the stall
 # watchdog's message is the useful thing instead.
@@ -25,39 +32,40 @@ _api() {
   local method="$1" path="$2" body="${3:-}"
   [ -n "$(_token)" ] || return 1
   if [ -n "$body" ]; then
-    curl -fsS -X "$method" "$API$path" \
+    curl -fsS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      -X "$method" "$API$path" \
       -H "Authorization: Bot $(_token)" \
       -H "Content-Type: application/json" \
       -d "$body" 2>/dev/null
   else
-    curl -fsS -X "$method" "$API$path" -H "Authorization: Bot $(_token)" 2>/dev/null
+    curl -fsS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      -X "$method" "$API$path" -H "Authorization: Bot $(_token)" 2>/dev/null
   fi
 }
 
 # The newest transcript is the only place that knows which conversation this is:
 # the inbound tag carries chat_id, and every reply result carries the id of the
 # message it sent. Both are needed to edit rather than pile up new messages.
-_transcript() {
-  find "$PROJECTS" -maxdepth 1 -name '*.jsonl' -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | head -1 | cut -d' ' -f2-
-}
-
 _chat_id() {
-  local f; f="$(_transcript)" || return 1
+  local f; f="$(ws_transcript)"
   [ -n "$f" ] || return 1
-  grep -o 'chat_id=\\"[0-9]*\\"' "$f" 2>/dev/null | tail -1 | grep -o '[0-9]*'
+  ws_transcript_chat_id "$f"
 }
 
 _last_message_id() {
-  local f; f="$(_transcript)" || return 1
+  local f; f="$(ws_transcript)"
   [ -n "$f" ] || return 1
-  grep -o 'sent (id: [0-9]*)' "$f" 2>/dev/null | tail -1 | grep -o '[0-9]*'
+  ws_transcript_last_message_id "$f"
 }
 
 _json_string() {
   # jq is present in the image and does the escaping correctly; a hand-rolled
   # sed would break on the first quote or newline in an error message.
-  jq -Rn --arg s "$1" '{content: $s}'
+  # Compact: a pretty-printed body spans lines, which turns one request into
+  # several lines in any log that records the command — including the test stub,
+  # where an assertion then matches the method on one line and the content on
+  # another and quietly proves nothing.
+  jq -cRn --arg s "$1" '{content: $s}'
 }
 
 cmd_say() {

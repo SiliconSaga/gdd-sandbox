@@ -19,6 +19,45 @@ ws_host_path() {
     fi
 }
 
+# Where the session writes its transcript, and how to read the two markers that
+# matter. Defined once because three copies were drifting apart: the supervisor
+# used them to tell "finished" from "stopped", the notifier to find the message
+# to edit, and a change to either the path or the marker format had to land in
+# every copy. A missed copy fails silently — `unanswered_request` just returns
+# false and the stall is never reported, which is the failure this all exists to
+# catch.
+GDD_TRANSCRIPTS_DEFAULT="${HOME}/.claude/projects/-work-ws"
+
+ws_transcript() {
+    local dir="${GDD_TRANSCRIPT_DIR:-$GDD_TRANSCRIPTS_DEFAULT}"
+    find "$dir" -maxdepth 1 -name '*.jsonl' -printf '%T@ %p\n' 2>/dev/null \
+        | sort -rn | head -1 | cut -d' ' -f2-
+}
+
+# The channel a conversation is happening in. Carried on every inbound message.
+ws_transcript_chat_id() {
+    local f="${1:-}"; [ -n "$f" ] || return 1
+    grep -o 'chat_id=\\"[0-9]*\\"' "$f" 2>/dev/null | tail -1 | grep -o '[0-9]*'
+}
+
+# The id of the last message the agent sent, as reported back by the reply tool.
+ws_transcript_last_message_id() {
+    local f="${1:-}"; [ -n "$f" ] || return 1
+    grep -o 'sent (id: [0-9]*)' "$f" 2>/dev/null | tail -1 | grep -o '[0-9]*'
+}
+
+# Line numbers of the last inbound request and the last reply. Whichever is
+# later decides whether anyone is still waiting on an answer.
+ws_transcript_last_in_line() {
+    local f="${1:-}"; [ -n "$f" ] || return 1
+    grep -n 'chat_id=' "$f" 2>/dev/null | tail -1 | cut -d: -f1
+}
+
+ws_transcript_last_out_line() {
+    local f="${1:-}"; [ -n "$f" ] || return 1
+    grep -n 'sent (id:' "$f" 2>/dev/null | tail -1 | cut -d: -f1
+}
+
 # The runtime secrets the sandbox is allowed to receive. Deliberately a short
 # allowlist: everything else in the operator's .env (GH_TOKEN, HARBOR_ADMIN_PW,
 # ...) stays OUT of the container.

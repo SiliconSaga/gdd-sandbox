@@ -72,10 +72,26 @@ dest="$dest_dir/$TARGET-$(date +%F).md"
 # refusing to recycle it would leave the operator unable to use this tool at all
 # on the very containers most likely to be thrown away. Say so and continue: the
 # guard that matters is the uncommitted-work one above.
-if ! ws docker exec "$NAME" test -f /work/ws/Thalamus.md 2>/dev/null; then
-  echo "harvest: no Thalamus in $NAME — nothing to rescue."
-  exit 0
-fi
+# The probe must say which of three things it found, because two of them look
+# identical through an exit status: the file is absent, or the probe itself never
+# ran. Treating a failed probe as "absent" would hand recycle.sh a green light to
+# delete a volume whose notes were never checked — the same fail-open-toward-
+# destruction shape as the dirty-repo check above, which is why that one refuses
+# too. So the container answers in words, and anything else is a failure.
+# `|| true` so a failed probe reaches the case below instead of tripping `set -e`
+# at the assignment, which would exit with no explanation at all — the silent
+# stop being the one outcome this script exists to avoid.
+probe="$(ws docker exec "$NAME" sh -c 'test -f /work/ws/Thalamus.md && echo PRESENT || echo ABSENT' 2>/dev/null || true)"
+case "$probe" in
+  *PRESENT*) : ;;
+  *ABSENT*)
+    echo "harvest: no Thalamus in $NAME — nothing to rescue."
+    exit 0 ;;
+  *)
+    echo "error: could not check for a Thalamus in $NAME — refusing to harvest." >&2
+    echo "Is the container running? 'ws docker ps' to check." >&2
+    exit 1 ;;
+esac
 
 # The destination is a HOST path handed to docker, so it needs the same
 # conversion run.sh does for its env-file. Without it an MSYS path arrives as

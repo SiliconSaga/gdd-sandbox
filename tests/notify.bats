@@ -66,11 +66,14 @@ esac'
   printf '{"type":"user","toolUseResult":[{"type":"text","text":"sent (id: 888)"}]}\n' \
     >> "$GDD_TRANSCRIPT_DIR/session.jsonl"
   bash bin/notify.sh progress
-  run cat "$STUB_LOG"
-  # The newest message is the one being edited...
+  # Only the LAST edit says anything about re-anchoring: the single-dot text also
+  # appears in the very first tick, so matching the whole log would pass even if
+  # the ticker had ignored the new message entirely.
+  run bash -c "grep PATCH '$STUB_LOG' | tail -1"
   [[ "$output" == *"/channels/555/messages/888"* ]]
   # ...and it starts its own line of dots rather than inheriting the old count.
   [[ "$output" == *"Got it — taking a look. ."* ]]
+  [[ "$output" != *"Got it — taking a look. .."* ]]
 }
 
 @test "reset makes the next tick track a fresh message" {
