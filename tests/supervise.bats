@@ -234,6 +234,20 @@ EOF
   grep -q "pkill" "$STUB_LOG"
 }
 
+@test "a prompt just raised is not also announced — that is the same news twice" {
+  # The card has already reached whoever can answer it. Announcing at the same
+  # moment trains people to tune the channel out, which costs more than it saves.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
+  export GDD_PROMPT_NOTICE_AFTER=60
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  make_stub pgrep 'echo 1234'
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  export SUPERVISE_MAX_TICKS=2
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" != *"notify operator"* ]]
+}
+
 @test "a pending prompt tells the person, and the operator, before anything else" {
   # Observed: a permission card reached the operator's DMs and the person in the
   # channel saw nothing but "Back shortly" — for over three minutes, then never
@@ -244,6 +258,9 @@ EOF
   # launch() truncates the tty log on entry, so the fixture has to arrive the way
   # the real thing does: written by the session as it runs.
   export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  # Zero isolates what this test is about — that both audiences are told, and
+  # what they are told. The delay before saying it has its own test above.
+  export GDD_PROMPT_NOTICE_AFTER=0
   make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
   run bash bin/supervise.sh
   run cat "$STUB_LOG"

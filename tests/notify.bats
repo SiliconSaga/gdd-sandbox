@@ -58,6 +58,21 @@ esac'
   [ "$output" = "2" ]
 }
 
+@test "progress follows the conversation when the agent speaks again" {
+  # Seen live: the agent posted newer messages while the dots kept growing on its
+  # first acknowledgement, which reads as stuck rather than busy.
+  bash bin/notify.sh progress
+  bash bin/notify.sh progress
+  printf '{"type":"user","toolUseResult":[{"type":"text","text":"sent (id: 888)"}]}\n' \
+    >> "$GDD_TRANSCRIPT_DIR/session.jsonl"
+  bash bin/notify.sh progress
+  run cat "$STUB_LOG"
+  # The newest message is the one being edited...
+  [[ "$output" == *"/channels/555/messages/888"* ]]
+  # ...and it starts its own line of dots rather than inheriting the old count.
+  [[ "$output" == *"Got it — taking a look. ."* ]]
+}
+
 @test "reset makes the next tick track a fresh message" {
   bash bin/notify.sh progress
   bash bin/notify.sh reset

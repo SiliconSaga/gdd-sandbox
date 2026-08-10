@@ -80,7 +80,16 @@ cmd_reset() { rm -f "$STATE"; }
 # also do not fire push notifications, so a phone stays quiet until there is
 # something to say.
 cmd_progress() {
-  local chat msg base dots
+  local chat msg base dots current
+  # Follow the conversation. The agent posts as it goes, and dots accumulating on
+  # a message three replies back read as stuck rather than busy — observed live:
+  # the line grew on the first acknowledgement while the newer messages sat
+  # still. Whenever the agent has said something newer, re-anchor to that.
+  if [ -f "$STATE" ]; then
+    IFS=$'\t' read -r chat msg dots base < "$STATE"
+    current="$(_last_message_id)"
+    [ -n "$current" ] && [ "$current" != "$msg" ] && rm -f "$STATE"
+  fi
   if [ -f "$STATE" ]; then
     IFS=$'\t' read -r chat msg dots base < "$STATE"
   else

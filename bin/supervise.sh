@@ -93,6 +93,11 @@ PROMPT_POLL="${GDD_PROMPT_POLL:-30}"
 # do. Fifteen minutes is longer than any of that and still far short of "hung
 # forever", which is what this exists to prevent.
 PROMPT_GRACE="${GDD_PROMPT_GRACE:-900}"
+# Wait before announcing a pending prompt. The card already reached whoever can
+# answer it, so a simultaneous "you are blocked" is just the same news twice —
+# noise that trains people to ignore the channel. After a minute unanswered it
+# stops being duplication and starts being information.
+PROMPT_NOTICE_AFTER="${GDD_PROMPT_NOTICE_AFTER:-60}"
 # How often the progress line grows, and how long a quiet session is given before
 # the supervisor speaks for it. Ten seconds is slow enough to be cheap and fast
 # enough to look alive; two minutes of nothing, with a request still unanswered,
@@ -169,11 +174,14 @@ watch_prompts() {
   while pgrep -f 'claude .*--channels' >/dev/null; do
     now="$(bash "$HERE/session-log.sh" 6 "$TTY_LOG" 2>/dev/null || true)"
     if ws_prompt_pending "$now"; then
-      # Say it once, immediately. The failure that prompted this: a card reached
-      # the operator's DMs while the person in the channel saw only "Back
-      # shortly" and then nothing at all. Both audiences need it — the person so
-      # the silence has a reason, the operator so they know they are the delay.
-      if [ "$announced" -eq 0 ]; then
+      # Say it once, after the prompt has gone unanswered for a while. The
+      # failure that prompted this: a card reached the operator's DMs while the
+      # person in the channel saw only "Back shortly" and then nothing at all.
+      # Both audiences need it — the person so the silence has a reason, the
+      # operator so they know they are the delay. Not instantly, though: fired
+      # alongside the card it is the same news twice, which is how a channel
+      # becomes background noise.
+      if [ "$announced" -eq 0 ] && [ "$waited" -ge "$PROMPT_NOTICE_AFTER" ]; then
         announced=1
         notify say "I need an approval before I can carry on — I've asked the operator. Nothing is lost; I'll pick up as soon as it comes through."
         notify operator "Session is blocked on a permission prompt and cannot proceed until it is answered. It will be declined automatically in $((PROMPT_GRACE / 60)) minutes."
