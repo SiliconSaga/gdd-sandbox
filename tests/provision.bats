@@ -297,6 +297,7 @@ setup() {
   # versions once, at provision time, means the agent's first `jekyll build`
   # finds them already there and has no reason to resolve anything.
   mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  printf 'source "https://rubygems.org"\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile"
   printf 'GEM\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile.lock"
   make_stub bundle 'echo "bundle $*" >> "$STUB_LOG"'
   bash provision/provision.sh
@@ -314,11 +315,25 @@ setup() {
   [[ "$output" != *"bundle install"* ]]
 }
 
+@test "a lockfile without a Gemfile is left alone" {
+  # Bundler needs the Gemfile to run at all, and a lockfile on its own gives it
+  # nothing to warm from — installing anyway would resolve fresh, which is the
+  # behaviour this whole step exists to avoid.
+  mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  printf 'GEM\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile.lock"
+  make_stub bundle 'echo "bundle $*" >> "$STUB_LOG"'
+  run bash provision/provision.sh
+  [ "$status" -eq 0 ]
+  run cat "$STUB_LOG"
+  [[ "$output" != *"bundle install"* ]]
+}
+
 @test "gems that will not install are reported, not fatal" {
   # A sandbox that cannot build locally can still read, edit and open a pull
   # request, and CI builds the site anyway. Refusing to start over a gem is a
   # worse outcome than starting without one.
   mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  printf 'source "https://rubygems.org"\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile"
   printf 'GEM\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile.lock"
   make_stub bundle 'echo "Could not find nokogiri-1.16.0" >&2; exit 1'
   run bash provision/provision.sh

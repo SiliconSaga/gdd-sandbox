@@ -78,18 +78,37 @@ esac'
   [[ "$output" != *"volume rm"* ]]
 }
 
+@test "an inspection that cannot see the workspace is not an absent Thalamus" {
+  # The ws call succeeds; the look inside fails. Answering ABSENT there would
+  # report "no notes" for an unmounted or unreadable volume, and recycle deletes
+  # on that answer — so the container reports UNKNOWN and harvest refuses.
+  make_stub ws 'case "$*" in
+  *"docker exec"*"[ -f /work/ws/Thalamus.md ]"*) echo UNKNOWN ;;
+  *"status --porcelain"*) : ;;
+  "hoard thalamus-path") echo "'"$BATS_TEST_TMPDIR"'/hoard/host-thalamus.md" ;;
+  *) : ;;
+esac'
+  run bash bin/recycle.sh --target ken-site
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not check"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" != *"docker stop"* ]]
+  [[ "$output" != *"volume rm"* ]]
+}
+
 @test "harvest copies the Thalamus beside the host's own hoard" {
   bash bin/harvest.sh --target ken-site
   # The copy line specifically, source AND destination together. Asserted apart
   # they pass on any log containing both somewhere — and until the stub stopped
   # matching every mention of Thalamus.md, the probe was answering for `docker
   # cp` too, so these tests could not tell a rescue from a question.
+  # Source and destination checked as one line, and the destination in full —
+  # a prefix plus a stray ".md" elsewhere in the log would otherwise satisfy it.
   run bash -c "grep 'docker cp' '$STUB_LOG'"
   [[ "$output" == *"gdd-sandbox-ken-site:/work/ws/Thalamus.md"* ]]
   # Kept distinct from the per-host files: when a tenant graduates to their own
   # plan and their own logins, what moves with them has to be separable.
-  [[ "$output" == *"/hoard/sandboxes/ken-site-"* ]]
-  [[ "$output" == *".md"* ]]
+  [[ "$output" == *"/hoard/sandboxes/ken-site-$(date +%F).md"* ]]
 }
 
 @test "harvest falls back to scratch when no hoard is active" {
@@ -102,7 +121,7 @@ esac'
   bash bin/harvest.sh --target ken-site
   run bash -c "grep 'docker cp' '$STUB_LOG'"
   [[ "$output" == *"gdd-sandbox-ken-site:/work/ws/Thalamus.md"* ]]
-  [[ "$output" == *".tmp/sandbox-harvest/ken-site-"* ]]
+  [[ "$output" == *".tmp/sandbox-harvest/ken-site-$(date +%F).md"* ]]
 }
 
 @test "harvest says what to record, since tooling does not write the Thalamus" {

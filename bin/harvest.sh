@@ -87,7 +87,11 @@ dest="$dest_dir/$TARGET-$(date +%F).md"
 # Matched exactly, not by wildcard: a warning line or a stray banner containing
 # the word ABSENT would otherwise be read as "verified missing" and hand
 # recycle.sh permission to delete the volume.
-if ! probe="$(ws docker exec "$NAME" sh -c 'if [ -f /work/ws/Thalamus.md ]; then echo PRESENT; else echo ABSENT; fi' 2>/dev/null)"; then
+# ABSENT is only meaningful if the workspace itself is there to look in. Without
+# that check an unmounted volume, or a path the probe cannot read, answers
+# "missing" — indistinguishable from a sandbox that genuinely kept no notes, and
+# recycle deletes on the strength of it.
+if ! probe="$(ws docker exec "$NAME" sh -c 'if [ ! -d /work/ws ]; then echo UNKNOWN; elif [ -f /work/ws/Thalamus.md ]; then echo PRESENT; else echo ABSENT; fi' 2>/dev/null)"; then
   probe=""
 fi
 probe="$(printf '%s' "$probe" | tr -d '\r\n')"

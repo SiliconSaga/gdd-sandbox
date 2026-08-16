@@ -90,7 +90,12 @@ fi
 # versions are installed here, so the agent's first build finds them present and
 # has nothing to resolve. Never fatal: a sandbox that cannot build locally can
 # still read, edit and open a pull request, and CI builds the site regardless.
-if [ -n "${GDD_TARGET:-}" ] && [ -f "$WS/components/$GDD_TARGET/Gemfile.lock" ]; then
+# Both files: bundler needs the Gemfile to run at all, and without the lockfile
+# there are no pinned versions to warm — installing from the Gemfile alone would
+# resolve fresh, which is the behaviour this exists to avoid.
+if [ -n "${GDD_TARGET:-}" ] \
+   && [ -f "$WS/components/$GDD_TARGET/Gemfile" ] \
+   && [ -f "$WS/components/$GDD_TARGET/Gemfile.lock" ]; then
   if (cd "$WS/components/$GDD_TARGET" && bundle install >/dev/null 2>&1); then
     echo "provision: warmed $GDD_TARGET's gems from its lockfile"
   else

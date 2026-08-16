@@ -131,6 +131,13 @@ RUN set -eux; \
 # turns a silent rewrite into a loud refusal, which is the correct outcome: a
 # lockfile that cannot be satisfied is news, not something to quietly fix.
 RUN bundle config set --global frozen true
+# Also as an environment variable. The global setting lives in the image's
+# bundler config, which a target repository's own .bundle/config can override —
+# and a site that ships `frozen: false` would silently restore the rewrite this
+# is meant to prevent. Belt and braces rather than a guarantee: a target could
+# still set BUNDLE_FROZEN itself, so treat this as a default that is hard to
+# undo by accident, not as enforcement.
+ENV BUNDLE_FROZEN=true
 
 # ---------------------------------------------------------------------------
 # 10. The operator scripts, baked in. They are agnostic — no realm, target, or
