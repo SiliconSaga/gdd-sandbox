@@ -10,6 +10,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 WS_ROOT="$(cd "$ROOT/../.." && pwd)"
+# shellcheck source=bin/lib.sh
+. "$HERE/lib.sh"
 
 TARGET="" NAME="" FORCE=0
 # `set -u` turns a value-less --target into an unbound-variable trace rather than
@@ -65,7 +67,51 @@ fi
 mkdir -p "$dest_dir"
 dest="$dest_dir/$TARGET-$(date +%F).md"
 
-ws docker cp "$NAME:/work/ws/Thalamus.md" "$dest"
+# Nothing to rescue is not a failure. A sandbox provisioned before the Thalamus
+# was seeded — or one that never finished provisioning — has no notes, and
+# refusing to recycle it would leave the operator unable to use this tool at all
+# on the very containers most likely to be thrown away. Say so and continue: the
+# guard that matters is the uncommitted-work one above.
+# The probe must say which of three things it found, because two of them look
+# identical through an exit status: the file is absent, or the probe itself never
+# ran. Treating a failed probe as "absent" would hand recycle.sh a green light to
+# delete a volume whose notes were never checked — the same fail-open-toward-
+# destruction shape as the dirty-repo check above, which is why that one refuses
+# too. So the container answers in words, and anything else is a failure.
+# Two conditions must BOTH hold before this counts as an answer: the call
+# succeeded, and the container said one of exactly two words. `if !` rather than
+# `|| true` so a failed call reaches the refusal instead of tripping `set -e` at
+# the assignment, which would exit with no explanation — the silent stop this
+# script exists to avoid.
+#
+# Matched exactly, not by wildcard: a warning line or a stray banner containing
+# the word ABSENT would otherwise be read as "verified missing" and hand
+# recycle.sh permission to delete the volume.
+# ABSENT is only meaningful if the workspace itself is there to look in. Without
+# that check an unmounted volume, or a path the probe cannot read, answers
+# "missing" — indistinguishable from a sandbox that genuinely kept no notes, and
+# recycle deletes on the strength of it.
+if ! probe="$(ws docker exec "$NAME" sh -c 'if [ ! -d /work/ws ]; then echo UNKNOWN; elif [ -f /work/ws/Thalamus.md ]; then echo PRESENT; else echo ABSENT; fi' 2>/dev/null)"; then
+  probe=""
+fi
+probe="$(printf '%s' "$probe" | tr -d '\r\n')"
+case "$probe" in
+  PRESENT) : ;;
+  ABSENT)
+    echo "harvest: no Thalamus in $NAME — nothing to rescue."
+    exit 0 ;;
+  *)
+    echo "error: could not check for a Thalamus in $NAME — refusing to harvest." >&2
+    echo "Is the container running? 'ws docker ps' to check." >&2
+    exit 1 ;;
+esac
+
+# The destination is a HOST path handed to docker, so it needs the same
+# conversion run.sh does for its env-file. Without it an MSYS path arrives as
+# `D:\d\Dev\…` — the drive letter prepended to a path that already had one — and
+# docker rejects a directory that very much exists. Unit tests stub `ws`, so this
+# only ever shows up on a real invocation.
+ws docker cp "$NAME:/work/ws/Thalamus.md" "$(ws_host_path "$dest")"
 echo "harvested: $dest"
 echo
 echo "Record this in your own Thalamus — tooling moves the file, you decide what it means:"

@@ -10,6 +10,26 @@ setup() {
   # they checked the default — the failure mode where a test passes about the
   # wrong thing.
   unset GDD_MODEL GDD_ALLOWED_TOOLS GDD_DENIED_TOOLS
+  # The supervisor can now TALK, and `ws test` loads the workspace .env — so a
+  # test that forgets to stub the notifier reaches Discord with the operator's
+  # real token and channel. That is not hypothetical: an unstubbed test sent two
+  # live DMs announcing a permission prompt that existed only in a fixture, and
+  # the give-away was its "16 minutes", which is 999/60 from a test's own knob.
+  #
+  # Both halves matter. The stub keeps assertions possible; clearing the
+  # credentials means even an unstubbed path has nothing to send with.
+  unset DISCORD_BOT_TOKEN GDD_OPERATOR_CHAT
+  # Per-test tty log. Left at its default every test would read and truncate the
+  # same /tmp/channels-tty.log — shared with any sandbox running on this machine,
+  # and with the other tests. Individual tests still override it to plant a
+  # fixture; this only stops the ones that do not from touching real state.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  cat > "$STUB_BIN/notify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "notify $*" >> "$STUB_LOG"
+EOF
+  chmod +x "$STUB_BIN/notify.sh"
+  export GDD_NOTIFY="$STUB_BIN/notify.sh"
   # 'script' is the PTY wrapper. make_stub already records the argv, so the body
   # stays empty — logging it again would double every count the tests assert on.
   make_stub script
@@ -25,8 +45,11 @@ setup() {
   [[ "$output" == *"--append-system-prompt"* ]]
   [[ "$output" == *"ken-site"* ]]
   [[ "$output" == *"gdd-sandbox-briefing.md"* ]]
-  # The primer is embedded in a `script -c` string: newlines would break it.
-  run bash -c "grep -c '' \"$STUB_LOG\""
+  # The primer is embedded in a `script -c` string: newlines would break it, so
+  # the launch must occupy exactly one line. Counted per-stub rather than over
+  # the whole log — the supervisor legitimately calls other things now, and a
+  # bare line count would fail for reasons that have nothing to do with quoting.
+  run bash -c "grep -c '^script ' \"$STUB_LOG\""
   [ "$output" = "1" ]
 }
 
@@ -213,10 +236,156 @@ setup() {
   make_stub pgrep 'case "$*" in *claude-plugins-official/discord*) exit 1 ;; *) echo 1234 ;; esac'
   make_stub pkill 'echo "pkill $*" >> "$STUB_LOG"'
   # Keep the session "running" long enough for the watchdog to act.
-  make_stub script 'sleep 1'
+  make_stub script "printf \"Do you want to proceed?\n\" > \"$GDD_TTY_LOG\"; sleep 1"
   run bash bin/supervise.sh
   [[ "$output" == *"channel server gone"* ]]
   grep -q "pkill" "$STUB_LOG"
+}
+
+@test "a prompt just raised is not also announced — that is the same news twice" {
+  # The card has already reached whoever can answer it. Announcing at the same
+  # moment trains people to tune the channel out, which costs more than it saves.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
+  export GDD_PROMPT_NOTICE_AFTER=60
+  make_stub pgrep 'echo 1234'
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  export SUPERVISE_MAX_TICKS=2
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  # Both routes: the delay is meant to hold the whole announcement, and checking
+  # only the operator would pass a regression that told the channel immediately.
+  [[ "$output" != *"notify operator"* ]]
+  [[ "$output" != *"notify say"* ]]
+
+  # Positive control. On its own the assertion above passes just as happily when
+  # the fixture never lands or the watchdog never looks — proving nothing about
+  # the delay. Same setup, no delay: the notice must appear, which is what shows
+  # the absence above was a choice rather than an accident.
+  : > "$STUB_LOG"
+  export GDD_PROMPT_NOTICE_AFTER=0
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify operator"* ]]
+  [[ "$output" == *"notify say"* ]]
+}
+
+@test "a pending prompt tells the person, and the operator, before anything else" {
+  # Observed: a permission card reached the operator's DMs and the person in the
+  # channel saw nothing but "Back shortly" — for over three minutes, then never
+  # again. Whoever is waiting should learn that the agent is blocked on an
+  # approval, and the operator should learn that they are the one holding it up.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
+  make_stub pgrep 'echo 1234'
+  # launch() truncates the tty log on entry, so the fixture has to arrive the way
+  # the real thing does: written by the session as it runs.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  # Zero isolates what this test is about — that both audiences are told, and
+  # what they are told. The delay before saying it has its own test above.
+  export GDD_PROMPT_NOTICE_AFTER=0
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  run bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify say"* ]]
+  [[ "$output" == *"notify operator"* ]]
+}
+
+@test "a prompt someone may still answer is not cancelled out from under them" {
+  # The watchdog declined a card at ~3m20s while a human was mid-decision — the
+  # exact thing its own comment says it must never do. The window has to outlast
+  # a notification reaching a phone, being read, and being acted on.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=999
+  make_stub pgrep 'echo 1234'
+  # launch() truncates the tty log on entry, so the fixture has to arrive the way
+  # the real thing does: written by the session as it runs.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  run bash bin/supervise.sh
+  [[ "$output" != *"declining a prompt"* ]]
+}
+
+@test "a prompt nobody answers is still declined, and said out loud" {
+  # The original purpose survives: a prompt with no answerer must not hang the
+  # session forever. But it stops being silent — going quiet is what made the
+  # last two failures indistinguishable from working.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=0
+  make_stub pgrep 'echo 1234'
+  # launch() truncates the tty log on entry, so the fixture has to arrive the way
+  # the real thing does: written by the session as it runs.
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  make_stub script "printf 'Do you want to proceed?' > $GDD_TTY_LOG; sleep 1"
+  run bash bin/supervise.sh
+  [[ "$output" == *"declining a prompt"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify say"* ]]
+}
+
+@test "a prompt is declined on its age, even while the screen keeps repainting" {
+  # The decline used to also require two polls to look byte-for-byte identical.
+  # Anything drawing behind the dialog — a spinner frame, output arriving late —
+  # meant that never happened, so the timeout could not fire and the session hung
+  # exactly as it did before any of this existed. Age is the gate; the screen is
+  # allowed to move.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=0
+  make_stub pgrep 'echo 1234'
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  # The prompt stays put; the line above it changes on every rewrite.
+  make_stub script "i=0; while [ \$i -lt 20 ]; do printf 'working %s\nDo you want to proceed?\n' \$i > $GDD_TTY_LOG; i=\$((i + 1)); sleep 0.2; done"
+  run timeout 20 bash bin/supervise.sh
+  [[ "$output" == *"declining a prompt"* ]]
+}
+
+@test "work in progress shows as a growing line, not silence" {
+  # From the outside, thinking and having died look identical. A line that grows
+  # says "still going" without spending a token or pinging anyone's phone.
+  export GDD_CHANNEL_GRACE=0 GDD_PROGRESS_POLL=0 GDD_STALL_AFTER=999
+  export GDD_TRANSCRIPT_DIR="$BATS_TEST_TMPDIR/projects"
+  mkdir -p "$GDD_TRANSCRIPT_DIR"
+  # A transcript being written to right now is what "busy" means.
+  make_stub pgrep 'echo 1234'
+  make_stub script "while : ; do date >> $GDD_TRANSCRIPT_DIR/s.jsonl; sleep 0.2; done"
+  export SUPERVISE_MAX_TICKS=3
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify progress"* ]]
+}
+
+@test "a turn that ends with the request unanswered is reported, not left quiet" {
+  # The failure twice over: the agent stopped — once after seven refusals, once
+  # after a cancelled approval — and the person kept waiting on a reply that was
+  # never coming. Nobody has to notice for this to be caught.
+  export GDD_CHANNEL_GRACE=0 GDD_PROGRESS_POLL=0 GDD_STALL_AFTER=0
+  export GDD_TRANSCRIPT_DIR="$BATS_TEST_TMPDIR/projects"
+  mkdir -p "$GDD_TRANSCRIPT_DIR"
+  # An inbound request with no reply after it, then nothing: someone asked, and
+  # the session went quiet. A transcript with no request in it is a session
+  # sitting idle between jobs, which is not a stall.
+  cat > "$GDD_TRANSCRIPT_DIR/s.jsonl" <<'JSON'
+{"type":"user","message":{"content":"<channel source=\"discord\" chat_id=\"555\">please add the photo"}}
+JSON
+  make_stub pgrep 'echo 1234'
+  make_stub script 'sleep 2'
+  export SUPERVISE_MAX_TICKS=3
+  run timeout 20 bash bin/supervise.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"notify say"* ]]
+  [[ "$output" == *"notify operator"* ]]
+}
+
+@test "a stall is announced once, not on every tick" {
+  # A watchdog that repeats itself every few seconds is a worse experience than
+  # the silence it replaced.
+  export GDD_CHANNEL_GRACE=0 GDD_PROGRESS_POLL=0 GDD_STALL_AFTER=0
+  export GDD_TRANSCRIPT_DIR="$BATS_TEST_TMPDIR/projects"
+  mkdir -p "$GDD_TRANSCRIPT_DIR"
+  cat > "$GDD_TRANSCRIPT_DIR/s.jsonl" <<'JSON'
+{"type":"user","message":{"content":"<channel source=\"discord\" chat_id=\"555\">please add the photo"}}
+JSON
+  make_stub pgrep 'echo 1234'
+  make_stub script 'sleep 2'
+  export SUPERVISE_MAX_TICKS=6
+  run timeout 20 bash bin/supervise.sh
+  run bash -c "grep -c 'notify operator' '$STUB_LOG'"
+  [ "$output" = "1" ]
 }
 
 @test "a failed --continue falls back to a fresh session" {

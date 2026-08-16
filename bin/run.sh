@@ -94,6 +94,9 @@ if [ -n "$CHANNEL" ]; then
 fi
 
 VOL="gdd-sandbox-$TARGET-ws"
+# GDD_SANDBOX carries the target's name rather than a bare flag: the workspace
+# hook pins its headless allowances to that one component, so a value it cannot
+# resolve matches nothing and every command falls through to the normal rules.
 ws docker run -d --name "$NAME" --restart unless-stopped \
   --env-file "$(ws_host_path "$RUNTIME_ENV")" \
   -e "GDD_TARGET=$TARGET" -e "GDD_TARGET_REPO=$TARGET_REPO" \
@@ -103,6 +106,7 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   -e "GDD_BRIEFING_EXTRA=$BRIEFING_EXTRA" -e "GDD_OPERATOR_CHAT=$OPERATOR_CHAT" \
   -e "GDD_HUMAN_ACCOUNT=$HUMAN_ACCOUNT" -e "GDD_PUBLIC_EMAIL_OK=$PUBLIC_EMAIL_OK" \
   -e "GDD_WORKSPACE=/work/ws" \
+  -e "GDD_SANDBOX=$TARGET" \
   ${MODEL_ENV[@]+"${MODEL_ENV[@]}"} \
   -v "$VOL:/work/ws" \
   -v "$VOL-claude:/root/.claude" \

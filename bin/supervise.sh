@@ -84,7 +84,33 @@ CHANNEL_POLL="${GDD_CHANNEL_POLL:-30}"
 # prompts as buttons, so declining after ninety seconds would cancel decisions a
 # human was in the middle of making — the watchdog is for when nobody will answer,
 # not for beating someone to the reply. Two polls, so roughly five minutes.
-PROMPT_POLL="${GDD_PROMPT_POLL:-150}"
+PROMPT_POLL="${GDD_PROMPT_POLL:-30}"
+# How long a prompt is left alone before the watchdog declines it.
+#
+# The old shape — two polls of 150s — worked out to roughly three minutes, and it
+# cancelled a card an operator was actively answering: notification to a phone,
+# read it, decide, tap. Its own comment said that was the one thing it must not
+# do. Fifteen minutes is longer than any of that and still far short of "hung
+# forever", which is what this exists to prevent.
+PROMPT_GRACE="${GDD_PROMPT_GRACE:-900}"
+# Wait before announcing a pending prompt. The card already reached whoever can
+# answer it, so a simultaneous "you are blocked" is just the same news twice —
+# noise that trains people to ignore the channel. After a minute unanswered it
+# stops being duplication and starts being information.
+PROMPT_NOTICE_AFTER="${GDD_PROMPT_NOTICE_AFTER:-60}"
+# How often the progress line grows, and how long a quiet session is given before
+# the supervisor speaks for it. Ten seconds is slow enough to be cheap and fast
+# enough to look alive; two minutes of nothing, with a request still unanswered,
+# is well past any normal pause between tool calls.
+PROGRESS_POLL="${GDD_PROGRESS_POLL:-10}"
+STALL_AFTER="${GDD_STALL_AFTER:-120}"
+# Narration lives in its own script so the supervisor can speak without spending
+# tokens, and so tests can stand a stub in front of it. Resolved at call time —
+# HERE is set further down, and a default evaluated here would be an unbound
+# variable for everyone who does NOT override it, which is the whole point of a
+# default. (It shipped that way for one run: the tests that set GDD_NOTIFY never
+# evaluated the default and passed while every other test in the file broke.)
+notify() { bash "${GDD_NOTIFY:-$HERE/notify.sh}" "$@" >/dev/null 2>&1 || true; }
 # Auto mode classifies each action instead of asking a human who is not there. Its
 # shipped rules already reason about the threats that matter here — exfiltration,
 # credential exploration, straying outside the repository, irreversible local
@@ -117,7 +143,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 BRIEFING="${GDD_BRIEFING_PATH:-/tmp/gdd-sandbox-briefing.md}"
 PRIMER="You are the agent for a GDD sandboxed workspace at ${WS}, scoped to the component ${GDD_TARGET:-unknown}. Chat messages come from a non-technical person and ask for real changes to that component, not for a reply written in chat. Before your first action, read ${BRIEFING} and follow it."
 LAUNCHED="$WS/.gdd-sandbox-launched"
-TTY_LOG=/tmp/channels-tty.log
+# Overridable so the prompt watchdog can be driven against a fixture. It was
+# previously untestable end to end, which is how a three-minute cancel window
+# shipped without anyone measuring it against a human's reaction time.
+TTY_LOG="${GDD_TTY_LOG:-/tmp/channels-tty.log}"
 FIFO=/tmp/claude-stdin
 
 # Watch the channel server for the life of a session. The agent does NOT exit when
@@ -137,25 +166,113 @@ FIFO=/tmp/claude-stdin
 # Prompts that genuinely need a person belong in chat as an outcome question, not
 # as a tool confirmation.
 #
-# Requires the prompt to persist across two polls, so a prompt being answered by
-# some other path is not cancelled out from under it.
+# The prompt must still be pending when the grace period runs out, so one being
+# answered by some other path is never cancelled out from under whoever answered.
 watch_prompts() {
-  local last="" now=""
+  local now="" waited=0 announced=0 since=0
   sleep "$CHANNEL_GRACE"
   while pgrep -f 'claude .*--channels' >/dev/null; do
     now="$(bash "$HERE/session-log.sh" 6 "$TTY_LOG" 2>/dev/null || true)"
     if ws_prompt_pending "$now"; then
-      if [ -n "$last" ] && [ "$now" = "$last" ]; then
+      # Age the prompt from when it FIRST appeared, not from the last time the
+      # screen happened to look identical. The old counter only advanced while
+      # the tail was byte-for-byte unchanged, so any repaint — a spinner frame, a
+      # line of output arriving behind the dialog — reset it to zero, and a busy
+      # screen could hold a prompt open indefinitely with neither the notice nor
+      # the decline ever firing.
+      # KNOWN GAP: the clock is per pending-run, not per prompt. If one prompt is
+      # answered and another appears inside a single poll interval, no poll sees
+      # an absent prompt and the new one inherits the old one's age — so a prompt
+      # raised while its predecessor was already near the limit can be declined
+      # almost immediately. Telling two prompts apart needs an identity read off
+      # the screen, which is the repaint-sensitive coupling removed below; getting
+      # that wrong restores the indefinite hang, a worse failure than an early
+      # decline that is announced to both audiences. Left as is deliberately.
+      [ "$since" -eq 0 ] && since="$(date +%s)"
+      waited=$(( $(date +%s) - since ))
+      # Say it once, after the prompt has gone unanswered for a while. The
+      # failure that prompted this: a card reached the operator's DMs while the
+      # person in the channel saw only "Back shortly" and then nothing at all.
+      # Both audiences need it — the person so the silence has a reason, the
+      # operator so they know they are the delay. Not instantly, though: fired
+      # alongside the card it is the same news twice, which is how a channel
+      # becomes background noise.
+      if [ "$announced" -eq 0 ] && [ "$waited" -ge "$PROMPT_NOTICE_AFTER" ]; then
+        announced=1
+        notify say "I need an approval before I can carry on — I've asked the operator. Nothing is lost; I'll pick up as soon as it comes through."
+        notify operator "Session is blocked on a permission prompt and cannot proceed until it is answered. It will be declined automatically in $((PROMPT_GRACE / 60)) minutes."
+      fi
+      # The age is the whole gate. Requiring the screen to also be unchanged made
+      # a repaint able to defer the decline indefinitely — the same defect as the
+      # old counter, moved from the clock to the trigger, and it would reopen the
+      # hang this exists to end. Nothing is lost: reaching PROMPT_GRACE already
+      # means the prompt was pending continuously for the whole window.
+      if [ "$waited" -ge "$PROMPT_GRACE" ]; then
+        # Still the ORIGINAL purpose: a prompt nobody will answer must not hang
+        # the session forever. What changed is the clock — it now outlasts a
+        # notification reaching a phone — and that it no longer happens silently.
         echo "supervise: declining a prompt with no human to answer it" >&2
+        notify say "I couldn't get the approval I needed, so I've stopped rather than leave you waiting. The operator has the details."
+        notify operator "Permission prompt went unanswered for $((PROMPT_GRACE / 60))m and was declined. The session has been unblocked but the request was not completed."
         printf '\033' > "$FIFO"     # Esc cancels, whatever the prompt's shape
-        last=""
-      else
-        last="$now"
+        waited=0; announced=0; since=0
       fi
     else
-      last=""
+      waited=0; announced=0; since=0
     fi
     sleep "$PROMPT_POLL"
+  done
+}
+
+# Has the agent replied since the last thing it was asked?
+#
+# This is what separates "finished" from "stopped", and without it a stall
+# watchdog would announce a problem after every completed request. Both markers
+# live in the transcript: an inbound message carries a chat_id tag, and every
+# reply records the id it sent. Whichever appears LAST wins — a reply after the
+# request means answered, a request after the reply means someone is waiting.
+unanswered_request() {
+  local f last_in last_out
+  f="$(ws_transcript)"
+  [ -n "$f" ] || return 1
+  last_in="$(ws_transcript_last_in_line "$f")"
+  last_out="$(ws_transcript_last_out_line "$f")"
+  [ -n "$last_in" ] || return 1
+  [ -n "$last_out" ] || return 0
+  [ "$last_in" -gt "$last_out" ]
+}
+
+# Narrate long work, and speak up when it stops without finishing.
+#
+# The two failures this week ended identically: the agent went quiet and the
+# person kept waiting on a reply that was never coming — once after a run of
+# refusals, once after an approval was cancelled underneath it. Nobody has to be
+# watching for this to be caught, and it costs nothing per tick because it never
+# touches the model.
+watch_progress() {
+  local last_mtime="" now_mtime="" idle=0 stalled=0 ticks=0
+  sleep "$CHANNEL_GRACE"
+  while pgrep -f 'claude .*--channels' >/dev/null; do
+    now_mtime="$(find "${GDD_TRANSCRIPT_DIR:-$GDD_TRANSCRIPTS_DEFAULT}" -maxdepth 1 \
+                  -name '*.jsonl' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
+    if [ -n "$now_mtime" ] && [ "$now_mtime" != "$last_mtime" ]; then
+      # The transcript grows on every model event, so a changing file IS the
+      # session working — a far better signal than a process being alive, which
+      # stays true through every failure this design has hit.
+      last_mtime="$now_mtime"; idle=0; stalled=0
+      notify progress
+    else
+      idle=$((idle + PROGRESS_POLL))
+      if [ "$idle" -ge "$STALL_AFTER" ] && [ "$stalled" -eq 0 ] && unanswered_request; then
+        stalled=1        # once only: a watchdog that repeats every tick is worse than the silence
+        echo "supervise: session went quiet with a request unanswered" >&2
+        notify say "I've stopped before finishing what you asked, and I'm sorry — I'm not going to leave you waiting on a reply that isn't coming. The operator has been told and can pick it up."
+        notify operator "Session went quiet with an unanswered request: no reply since the last inbound message, no transcript activity for ${STALL_AFTER}s. Session is alive, so this is not a crash — check the tty log."
+      fi
+    fi
+    ticks=$((ticks + 1))
+    [ -n "${SUPERVISE_MAX_TICKS:-}" ] && [ "$ticks" -ge "$SUPERVISE_MAX_TICKS" ] && return 0
+    sleep "$PROGRESS_POLL"
   done
 }
 
@@ -175,19 +292,26 @@ launch() {
   local cont="$1"   # "--continue" or ""
   local rc=0
   : > "$TTY_LOG"; rm -f "$FIFO"; mkfifo "$FIFO"
+  # Forget which message the dots were growing on. The state file outlives the
+  # session — it sits in /tmp, not the transcript — so after a crash-relaunch or
+  # a rotation the ticker would keep editing a message from the conversation that
+  # just ended, which is worse than saying nothing.
+  notify reset
   sleep infinity > "$FIFO" &            # hold the FIFO open (drive prompts + no EOF)
   local w=$!
   watch_channel &
   local watcher=$!
   watch_prompts &
   local prompt_watcher=$!
+  watch_progress &
+  local progress_watcher=$!
   # -e so script returns the child's exit status; without it a failed session
   # looks successful and the fallback below never triggers.
   # shellcheck disable=SC2086
   script -q -e -f -c \
     "claude --channels plugin:discord@claude-plugins-official $MODEL_FLAG --permission-mode '$PERMISSION_MODE' --allowedTools '$ALLOWED_TOOLS' --disallowedTools '$DENIED_TOOLS' --append-system-prompt '$PRIMER' $cont" \
     "$TTY_LOG" < "$FIFO" || rc=$?
-  kill "$w" "$watcher" "$prompt_watcher" 2>/dev/null || true
+  kill "$w" "$watcher" "$prompt_watcher" "$progress_watcher" 2>/dev/null || true
   return "$rc"
 }
 
