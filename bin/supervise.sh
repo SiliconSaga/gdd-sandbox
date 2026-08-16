@@ -180,6 +180,14 @@ watch_prompts() {
       # line of output arriving behind the dialog — reset it to zero, and a busy
       # screen could hold a prompt open indefinitely with neither the notice nor
       # the decline ever firing.
+      # KNOWN GAP: the clock is per pending-run, not per prompt. If one prompt is
+      # answered and another appears inside a single poll interval, no poll sees
+      # an absent prompt and the new one inherits the old one's age — so a prompt
+      # raised while its predecessor was already near the limit can be declined
+      # almost immediately. Telling two prompts apart needs an identity read off
+      # the screen, which is the repaint-sensitive coupling removed below; getting
+      # that wrong restores the indefinite hang, a worse failure than an early
+      # decline that is announced to both audiences. Left as is deliberately.
       [ "$since" -eq 0 ] && since="$(date +%s)"
       waited=$(( $(date +%s) - since ))
       # Say it once, after the prompt has gone unanswered for a while. The

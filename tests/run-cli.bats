@@ -90,17 +90,23 @@ setup() {
   [[ "$output" == *"GDD_MODEL=sonnet"* ]]
 }
 
-@test "run.sh declares the session headless" {
-  # The workspace hook prompts on `ws exec`, which is how a sandboxed agent does
-  # everything — one photo request cost four approvals, relayed to a chat user
-  # who cannot evaluate a tool card. The flag tells the hook there is nobody to
-  # ask. Passed as container env rather than written into the workspace: the
-  # agent cannot alter the environment of the hook its own tool call spawns,
-  # but it could write any file it liked.
+@test "run.sh declares the session headless, naming the component it is scoped to" {
+  # The workspace hook's default for an undecidable command is to ask, and there
+  # is no one at a terminal to answer — the session blocks until the watchdog
+  # declines it. This variable tells the hook to decide instead.
+  #
+  # It carries the target's name, not a bare flag: the hook pins its headless
+  # allowances to that one component, so the sandbox cannot use them to reach
+  # another component or the workspace repository itself. A bare `1` would resolve
+  # to no component and quietly allow nothing.
+  #
+  # Passed as container env rather than written into the workspace: the agent
+  # cannot alter the environment of the hook its own tool call spawns, but it
+  # could write any file it liked.
   printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
   bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
   run cat "$STUB_LOG"
-  [[ "$output" == *"-e GDD_SANDBOX=1"* ]]
+  [[ "$output" == *"-e GDD_SANDBOX=ken-site"* ]]
 }
 
 @test "run.sh preserves an explicitly empty model setting" {
