@@ -78,13 +78,22 @@ dest="$dest_dir/$TARGET-$(date +%F).md"
 # delete a volume whose notes were never checked — the same fail-open-toward-
 # destruction shape as the dirty-repo check above, which is why that one refuses
 # too. So the container answers in words, and anything else is a failure.
-# `|| true` so a failed probe reaches the case below instead of tripping `set -e`
-# at the assignment, which would exit with no explanation at all — the silent
-# stop being the one outcome this script exists to avoid.
-probe="$(ws docker exec "$NAME" sh -c 'test -f /work/ws/Thalamus.md && echo PRESENT || echo ABSENT' 2>/dev/null || true)"
+# Two conditions must BOTH hold before this counts as an answer: the call
+# succeeded, and the container said one of exactly two words. `if !` rather than
+# `|| true` so a failed call reaches the refusal instead of tripping `set -e` at
+# the assignment, which would exit with no explanation — the silent stop this
+# script exists to avoid.
+#
+# Matched exactly, not by wildcard: a warning line or a stray banner containing
+# the word ABSENT would otherwise be read as "verified missing" and hand
+# recycle.sh permission to delete the volume.
+if ! probe="$(ws docker exec "$NAME" sh -c 'if [ -f /work/ws/Thalamus.md ]; then echo PRESENT; else echo ABSENT; fi' 2>/dev/null)"; then
+  probe=""
+fi
+probe="$(printf '%s' "$probe" | tr -d '\r\n')"
 case "$probe" in
-  *PRESENT*) : ;;
-  *ABSENT*)
+  PRESENT) : ;;
+  ABSENT)
     echo "harvest: no Thalamus in $NAME — nothing to rescue."
     exit 0 ;;
   *)

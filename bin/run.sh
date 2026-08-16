@@ -103,6 +103,7 @@ ws docker run -d --name "$NAME" --restart unless-stopped \
   -e "GDD_BRIEFING_EXTRA=$BRIEFING_EXTRA" -e "GDD_OPERATOR_CHAT=$OPERATOR_CHAT" \
   -e "GDD_HUMAN_ACCOUNT=$HUMAN_ACCOUNT" -e "GDD_PUBLIC_EMAIL_OK=$PUBLIC_EMAIL_OK" \
   -e "GDD_WORKSPACE=/work/ws" \
+  -e "GDD_SANDBOX=1" \
   ${MODEL_ENV[@]+"${MODEL_ENV[@]}"} \
   -v "$VOL:/work/ws" \
   -v "$VOL-claude:/root/.claude" \

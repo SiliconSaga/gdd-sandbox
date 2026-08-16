@@ -290,6 +290,43 @@ setup() {
   [ "$output" = "hard-won observation" ]
 }
 
+@test "provision warms the target's own gems, from its lockfile" {
+  # The image caches a generic github-pages set, which is not the same as what
+  # this site pins — so the first local build re-resolved and rewrote the
+  # lockfile that the production build depends on. Installing the target's exact
+  # versions once, at provision time, means the agent's first `jekyll build`
+  # finds them already there and has no reason to resolve anything.
+  mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  printf 'GEM\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile.lock"
+  make_stub bundle 'echo "bundle $*" >> "$STUB_LOG"'
+  bash provision/provision.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"bundle install"* ]]
+}
+
+@test "a target with no lockfile is not a failure" {
+  # Most components are not Jekyll sites. Nothing to warm is the normal case.
+  mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  make_stub bundle 'echo "bundle $*" >> "$STUB_LOG"'
+  run bash provision/provision.sh
+  [ "$status" -eq 0 ]
+  run cat "$STUB_LOG"
+  [[ "$output" != *"bundle install"* ]]
+}
+
+@test "gems that will not install are reported, not fatal" {
+  # A sandbox that cannot build locally can still read, edit and open a pull
+  # request, and CI builds the site anyway. Refusing to start over a gem is a
+  # worse outcome than starting without one.
+  mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  printf 'GEM\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile.lock"
+  make_stub bundle 'echo "Could not find nokogiri-1.16.0" >&2; exit 1'
+  run bash provision/provision.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING"* ]]
+  [[ "$output" == *"gems"* ]]
+}
+
 @test "provision tells the agent where to send technical detail" {
   # That direct message is the only alert this sandbox has — nobody is watching a
   # dashboard, so losing it means the first sign of trouble is a person waiting.

@@ -90,6 +90,19 @@ setup() {
   [[ "$output" == *"GDD_MODEL=sonnet"* ]]
 }
 
+@test "run.sh declares the session headless" {
+  # The workspace hook prompts on `ws exec`, which is how a sandboxed agent does
+  # everything — one photo request cost four approvals, relayed to a chat user
+  # who cannot evaluate a tool card. The flag tells the hook there is nobody to
+  # ask. Passed as container env rather than written into the workspace: the
+  # agent cannot alter the environment of the hook its own tool call spawns,
+  # but it could write any file it liked.
+  printf 'CLAUDE_CODE_OAUTH_TOKEN=abc\n' > "$BATS_TEST_TMPDIR/secrets.env"
+  bash bin/run.sh --target ken-site --secrets "$BATS_TEST_TMPDIR/secrets.env"
+  run cat "$STUB_LOG"
+  [[ "$output" == *"-e GDD_SANDBOX=1"* ]]
+}
+
 @test "run.sh preserves an explicitly empty model setting" {
   # `GDD_MODEL=` is the deliberate "give me whatever my account defaults to". It
   # has to survive as an empty value: dropped here it would read as unset, and

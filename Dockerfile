@@ -121,6 +121,17 @@ RUN set -eux; \
     npx --yes playwright@latest install --with-deps chromium; \
     cd /; rm -rf "$tmp"
 
+# Bundler may not rewrite a lockfile. Set AFTER the warming step above, which
+# has no lockfile of its own to respect.
+#
+# A site's Gemfile.lock decides what its production build runs on — the sandbox
+# agent found this itself, ran `bundle install`, watched it re-resolve nokogiri
+# and activesupport, and reverted by hand because MAINTAINING.md told it the
+# lockfile was load-bearing. The next agent might not read that far. Frozen
+# turns a silent rewrite into a loud refusal, which is the correct outcome: a
+# lockfile that cannot be satisfied is news, not something to quietly fix.
+RUN bundle config set --global frozen true
+
 # ---------------------------------------------------------------------------
 # 10. The operator scripts, baked in. They are agnostic — no realm, target, or
 #     credentials — so they belong to the image, and baking them lets the

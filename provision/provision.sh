@@ -75,6 +75,29 @@ else
   echo "provision: no GitHub token supplied — the agent can draft but not publish"
 fi
 
+# 2c. Warm the TARGET's own gems, from its own lockfile.
+#
+# The image caches a generic github-pages set at build time, which is not the
+# same as what a given site pins. The gap showed up in use: the agent ran
+# `bundle install` before a local build, bundler could not satisfy the lockfile
+# from the cache, re-resolved nokogiri and activesupport, and rewrote the
+# Gemfile.lock that the production build depends on. It noticed and reverted —
+# because MAINTAINING.md happened to say the lockfile was load-bearing — but
+# that is luck, not a mechanism.
+#
+# Two things fix it together: bundler is configured frozen in the image, so a
+# rewrite is impossible rather than merely discouraged, and the exact locked
+# versions are installed here, so the agent's first build finds them present and
+# has nothing to resolve. Never fatal: a sandbox that cannot build locally can
+# still read, edit and open a pull request, and CI builds the site regardless.
+if [ -n "${GDD_TARGET:-}" ] && [ -f "$WS/components/$GDD_TARGET/Gemfile.lock" ]; then
+  if (cd "$WS/components/$GDD_TARGET" && bundle install >/dev/null 2>&1); then
+    echo "provision: warmed $GDD_TARGET's gems from its lockfile"
+  else
+    echo "provision: WARNING could not install $GDD_TARGET's gems — local builds may fail (CI still builds)" >&2
+  fi
+fi
+
 # 3. Install the Discord channel plugin (brings its Bun deps). Provisioning runs
 # on every container start, so skip when it is already present — re-adding the
 # marketplace errors, and a restart should be fast.
