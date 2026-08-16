@@ -252,7 +252,10 @@ EOF
   export SUPERVISE_MAX_TICKS=2
   run timeout 20 bash bin/supervise.sh
   run cat "$STUB_LOG"
+  # Both routes: the delay is meant to hold the whole announcement, and checking
+  # only the operator would pass a regression that told the channel immediately.
   [[ "$output" != *"notify operator"* ]]
+  [[ "$output" != *"notify say"* ]]
 
   # Positive control. On its own the assertion above passes just as happily when
   # the fixture never lands or the watchdog never looks — proving nothing about
@@ -263,6 +266,7 @@ EOF
   run timeout 20 bash bin/supervise.sh
   run cat "$STUB_LOG"
   [[ "$output" == *"notify operator"* ]]
+  [[ "$output" == *"notify say"* ]]
 }
 
 @test "a pending prompt tells the person, and the operator, before anything else" {
@@ -313,6 +317,21 @@ EOF
   [[ "$output" == *"declining a prompt"* ]]
   run cat "$STUB_LOG"
   [[ "$output" == *"notify say"* ]]
+}
+
+@test "a prompt is declined on its age, even while the screen keeps repainting" {
+  # The decline used to also require two polls to look byte-for-byte identical.
+  # Anything drawing behind the dialog — a spinner frame, output arriving late —
+  # meant that never happened, so the timeout could not fire and the session hung
+  # exactly as it did before any of this existed. Age is the gate; the screen is
+  # allowed to move.
+  export GDD_CHANNEL_GRACE=0 GDD_PROMPT_POLL=0 GDD_PROMPT_GRACE=0
+  make_stub pgrep 'echo 1234'
+  export GDD_TTY_LOG="$BATS_TEST_TMPDIR/tty.log"
+  # The prompt stays put; the line above it changes on every rewrite.
+  make_stub script "i=0; while [ \$i -lt 20 ]; do printf 'working %s\nDo you want to proceed?\n' \$i > $GDD_TTY_LOG; i=\$((i + 1)); sleep 0.2; done"
+  run timeout 20 bash bin/supervise.sh
+  [[ "$output" == *"declining a prompt"* ]]
 }
 
 @test "work in progress shows as a growing line, not silence" {

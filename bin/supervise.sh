@@ -166,10 +166,10 @@ FIFO=/tmp/claude-stdin
 # Prompts that genuinely need a person belong in chat as an outcome question, not
 # as a tool confirmation.
 #
-# Requires the prompt to persist across two polls, so a prompt being answered by
-# some other path is not cancelled out from under it.
+# The prompt must still be pending when the grace period runs out, so one being
+# answered by some other path is never cancelled out from under whoever answered.
 watch_prompts() {
-  local last="" now="" waited=0 announced=0 since=0
+  local now="" waited=0 announced=0 since=0
   sleep "$CHANNEL_GRACE"
   while pgrep -f 'claude .*--channels' >/dev/null; do
     now="$(bash "$HERE/session-log.sh" 6 "$TTY_LOG" 2>/dev/null || true)"
@@ -179,8 +179,7 @@ watch_prompts() {
       # the tail was byte-for-byte unchanged, so any repaint — a spinner frame, a
       # line of output arriving behind the dialog — reset it to zero, and a busy
       # screen could hold a prompt open indefinitely with neither the notice nor
-      # the decline ever firing. Screen stability is still used, but only as
-      # corroboration for the decline, never as the clock.
+      # the decline ever firing.
       [ "$since" -eq 0 ] && since="$(date +%s)"
       waited=$(( $(date +%s) - since ))
       # Say it once, after the prompt has gone unanswered for a while. The
@@ -195,7 +194,12 @@ watch_prompts() {
         notify say "I need an approval before I can carry on — I've asked the operator. Nothing is lost; I'll pick up as soon as it comes through."
         notify operator "Session is blocked on a permission prompt and cannot proceed until it is answered. It will be declined automatically in $((PROMPT_GRACE / 60)) minutes."
       fi
-      if [ -n "$last" ] && [ "$now" = "$last" ] && [ "$waited" -ge "$PROMPT_GRACE" ]; then
+      # The age is the whole gate. Requiring the screen to also be unchanged made
+      # a repaint able to defer the decline indefinitely — the same defect as the
+      # old counter, moved from the clock to the trigger, and it would reopen the
+      # hang this exists to end. Nothing is lost: reaching PROMPT_GRACE already
+      # means the prompt was pending continuously for the whole window.
+      if [ "$waited" -ge "$PROMPT_GRACE" ]; then
         # Still the ORIGINAL purpose: a prompt nobody will answer must not hang
         # the session forever. What changed is the clock — it now outlasts a
         # notification reaching a phone — and that it no longer happens silently.
@@ -203,12 +207,10 @@ watch_prompts() {
         notify say "I couldn't get the approval I needed, so I've stopped rather than leave you waiting. The operator has the details."
         notify operator "Permission prompt went unanswered for $((PROMPT_GRACE / 60))m and was declined. The session has been unblocked but the request was not completed."
         printf '\033' > "$FIFO"     # Esc cancels, whatever the prompt's shape
-        last=""; waited=0; announced=0; since=0
-      else
-        last="$now"
+        waited=0; announced=0; since=0
       fi
     else
-      last=""; waited=0; announced=0; since=0
+      waited=0; announced=0; since=0
     fi
     sleep "$PROMPT_POLL"
   done

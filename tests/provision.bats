@@ -307,7 +307,10 @@ setup() {
 
 @test "a target with no lockfile is not a failure" {
   # Most components are not Jekyll sites. Nothing to warm is the normal case.
+  # The Gemfile is here on purpose: without it the check fails on the missing
+  # manifest and the test would pass without ever exercising the absent lockfile.
   mkdir -p "$GDD_WORKSPACE/components/ken-site"
+  printf 'source "https://rubygems.org"\n' > "$GDD_WORKSPACE/components/ken-site/Gemfile"
   make_stub bundle 'echo "bundle $*" >> "$STUB_LOG"'
   run bash provision/provision.sh
   [ "$status" -eq 0 ]

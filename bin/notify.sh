@@ -21,9 +21,11 @@ STATE="${GDD_PROGRESS_STATE:-/tmp/gdd-progress.state}"
 # have stalled. Failing a tick is nothing — the next one is seconds away.
 CURL_CONNECT_TIMEOUT="${GDD_CURL_CONNECT_TIMEOUT:-5}"
 CURL_MAX_TIME="${GDD_CURL_MAX_TIME:-15}"
-# 2000 is Discord's message ceiling; stop well short. At one dot per tick this is
-# also the point where "still going" stops being informative and the stall
-# watchdog's message is the useful thing instead.
+# Discord's message ceiling. An edit over it is rejected outright.
+MAX_CONTENT="${GDD_MAX_CONTENT:-2000}"
+# Stop well short of that ceiling in dots. At one dot per tick this is also the
+# point where "still going" stops being informative and the stall watchdog's
+# message is the useful thing instead.
 MAX_DOTS="${GDD_PROGRESS_MAX_DOTS:-90}"
 
 _token() { printf '%s' "${DISCORD_BOT_TOKEN:-}"; }
@@ -111,6 +113,13 @@ cmd_progress() {
   fi
   dots=$((dots + 1))
   [ "$dots" -le "$MAX_DOTS" ] || return 0
+  # MAX_DOTS bounds the suffix, not the whole message. Re-anchoring points at the
+  # agent's newest message, which can be a full-length reply rather than a short
+  # acknowledgement — appending to one near the ceiling gets the edit rejected,
+  # and because the state is only written on success every later tick repeats it.
+  # Stop instead: the dots are a nicety, and a message that long already says the
+  # agent is alive.
+  [ $(( ${#base} + 1 + dots )) -le "$MAX_CONTENT" ] || return 0
   local suffix=""
   local i=0
   while [ "$i" -lt "$dots" ]; do suffix="$suffix."; i=$((i + 1)); done

@@ -58,6 +58,29 @@ esac'
   [ "$output" = "2" ]
 }
 
+@test "a message already at the length limit is not edited past it" {
+  # The dot cap bounds the suffix, not the whole message, and re-anchoring points
+  # at the agent's newest message — which can be a full reply, not a short
+  # acknowledgement. Discord rejects an over-length edit, and state is only saved
+  # on success, so one such message would repeat the same failed PATCH every tick.
+  export GDD_MAX_CONTENT=20
+  make_stub curl 'case "$*" in
+  *"GET"*) echo "{\"content\": \"12345678901234567890\"}" ;;
+  *) : ;;
+esac'
+  bash bin/notify.sh progress
+  run cat "$STUB_LOG"
+  [[ "$output" != *"PATCH"* ]]
+
+  # Positive control. Room for exactly the space and one dot: the edit goes out,
+  # which is what shows the refusal above was the ceiling and not a broken fixture.
+  : > "$STUB_LOG"
+  export GDD_MAX_CONTENT=22
+  bash bin/notify.sh progress
+  run cat "$STUB_LOG"
+  [[ "$output" == *"PATCH"* ]]
+}
+
 @test "progress follows the conversation when the agent speaks again" {
   # Seen live: the agent posted newer messages while the dots kept growing on its
   # first acknowledgement, which reads as stuck rather than busy.
