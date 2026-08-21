@@ -177,6 +177,22 @@ setup() {
   [[ "$output" == *"ws commit ken-site"* ]]
 }
 
+@test "the briefing does not send the agent at a command it will be refused" {
+  # It used to name `bundle exec jekyll build` as the way to check work. The
+  # workspace hook now refuses that in a headless session — a build cleans its
+  # destination, and the destination can come from the project's own config, so
+  # no spelling of it is safe unattended. An instruction that ends in a denial is
+  # worse than no instruction: the agent burns turns rediscovering the rule, which
+  # is exactly the cold-session failure this briefing exists to prevent.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" != *"jekyll build"* ]]
+  # ...and says where the build actually happens, so the gap is answered rather
+  # than merely left out.
+  [[ "$output" == *"CI builds every pull request"* ]]
+}
+
 @test "the briefing points at the target's own documentation" {
   # Only the workspace AGENTS.md/CLAUDE.md load automatically, because the session
   # starts at the workspace root. A component's own docs are the project-specific
