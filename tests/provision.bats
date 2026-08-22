@@ -187,7 +187,12 @@ setup() {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh
   run cat "$GDD_BRIEFING_PATH"
-  [[ "$output" != *"jekyll build"* ]]
+  # Matched on the runnable form rather than the one subcommand: `jekyll serve`
+  # and `jekyll doctor` are refused for the same reason and would sail past an
+  # assertion naming only `build`. Case-sensitive on purpose — prose may well say
+  # "a Jekyll site", and that is not an instruction to run anything.
+  [[ "$output" != *"jekyll "* ]]
+  [[ "$output" != *"bundle exec jekyll"* ]]
   # ...and says where the build actually happens, so the gap is answered rather
   # than merely left out.
   [[ "$output" == *"CI builds every pull request"* ]]
