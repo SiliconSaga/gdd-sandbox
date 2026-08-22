@@ -79,6 +79,10 @@ EOF
   # Never a blanket bypass.
   [[ "$output" != *"bypassPermissions"* ]]
   [[ "$output" != *"dangerously-skip-permissions"* ]]
+  # And not the site build. It cleans its destination, which the project's own
+  # config can point anywhere, so the workspace hook refuses it unattended — an
+  # entry here would only promise something the hook then takes away.
+  [[ "$output" != *"jekyll"* ]]
 }
 
 @test "launch pins the model rather than inheriting whatever the account defaults to" {

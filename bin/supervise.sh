@@ -45,7 +45,14 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # spent seven denials rediscovering that and then stopped without a word. This is
 # the same action as one command with no `cd` and no `;`, so the compliant path
 # exists rather than only the prohibition.
-ALLOWED_BASE="mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*),Bash(bundle exec jekyll *)"
+# No `bundle exec jekyll *` entry. A site build cleans its destination of files it
+# did not generate, and the destination can be set from the project's own config,
+# so no spelling of the command is safe to run without a human — the workspace
+# hook refuses it in a headless session regardless of what is listed here. Builds
+# happen in CI on the pull request, which is where the preview and the before/
+# after screenshots come from. Restore this only alongside a `ws build` that
+# resolves the effective destination and refuses one outside the component.
+ALLOWED_BASE="mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*)"
 [ -n "${GDD_TARGET:-}" ] && ALLOWED_BASE="$ALLOWED_BASE,Bash(ws exec $GDD_TARGET *)"
 ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-$ALLOWED_BASE}"
 # Hard denials: destructive, out-of-scope, or irreversible — no card, no override.
