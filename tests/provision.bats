@@ -208,8 +208,12 @@ setup() {
   bash provision/provision.sh
   run cat "$GDD_BRIEFING_PATH"
   [[ "$output" == *"Write the Thalamus"* ]]
-  # The one category that must not wait for a convenient moment.
-  [[ "$output" == *"immediately"* ]]
+  [[ "$output" == *"Thalamus.md"* ]]
+  # Asserted as one instruction rather than as "Write the Thalamus" plus
+  # "immediately" found separately: both of those can be true of a briefing that
+  # never tells anyone to record a safety concern at all, and that is the single
+  # category here that must not wait for a convenient moment.
+  [[ "$output" == *"A safety or trust concern — immediately"* ]]
 }
 
 @test "the briefing points at the target's own documentation" {
