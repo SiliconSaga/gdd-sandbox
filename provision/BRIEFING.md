@@ -57,14 +57,22 @@ the result would be a commit missing the things that make it reviewable.
 | Run the tests | `ws test __TARGET__` |
 | See what changed | `ws status`, `ws log __TARGET__` |
 
-For everything with no verb of its own — creating a branch, checking status,
-building the site — use `ws exec`, which runs one command inside the component:
+For everything with no verb of its own — creating a branch, checking status —
+use `ws exec`, which runs one command inside the component:
 
 ```bash
 ws exec __TARGET__ git checkout -b <branch>
 ws exec __TARGET__ git status --short
-ws exec __TARGET__ bundle exec jekyll build
+ws exec __TARGET__ git diff
 ```
+
+**You cannot build the site here, and that is deliberate.** A site build cleans
+its output directory of files it did not generate, and the directory it cleans
+can be set from the project's own config — so there is no form of the command
+that is safe to run unattended. CI builds every pull request instead, and the
+result is on the PR page as a preview link with before/after screenshots, which
+is the thing worth looking at anyway. If a build error is what you are chasing,
+open the PR and read the check output rather than trying to reproduce it here.
 
 Not `cd components/__TARGET__; git status`. That is the habit to unlearn here;
 `ws exec` is the same action in the form this workspace accepts.
