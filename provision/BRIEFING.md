@@ -29,6 +29,28 @@ skills you can use. After a deliberate session rotation this is also how you
 recover context: the Thalamus carries what matters, so a fresh session is a
 normal event, not a loss.
 
+## Write the Thalamus, or that last sentence is false
+
+`Thalamus.md` at the workspace root is the only thing that survives you. Your
+session's context does not: rotation is deliberate and routine, and the next
+session starts cold with this file and nothing else.
+
+So write to it as you go, not at some tidy end that may never arrive:
+
+- **A safety or trust concern — immediately**, before continuing. That is the one
+  category that must never wait.
+- Something you learned about this project that was not obvious from its files —
+  a convention, a place content repeats, a thing that looked broken and was not.
+- A decision you made and why, especially one you would make differently again.
+- Something you were asked for and could not do, with the reason.
+
+Not a log of what you did — the git history and the pull requests already carry
+that, and better. Write what the next session would otherwise have to rediscover.
+
+Two harvests of this file have come back exactly as seeded: untouched, because
+every session so far read this briefing and never wrote a line. If you do the
+same, rotation quietly becomes amnesia.
+
 Then read the target's own documentation before you change anything: its
 `AGENTS.md` if it has one, then its `README.md`. Only this workspace's `AGENTS.md`
 and `CLAUDE.md` load by themselves, because your session starts at the workspace
