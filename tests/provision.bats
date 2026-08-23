@@ -198,6 +198,20 @@ setup() {
   [[ "$output" == *"CI builds every pull request"* ]]
 }
 
+@test "the briefing tells the agent to write the Thalamus, not just read it" {
+  # Provisioning seeds the file and rotation's safety rests on it, but two
+  # harvests two weeks apart came back byte-identical to the seed: the briefing
+  # said the Thalamus "carries what matters" and never said to put anything in
+  # it. An unwritten Thalamus makes deliberate rotation amnesia, so the claim has
+  # to come with the instruction.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  [[ "$output" == *"Write the Thalamus"* ]]
+  # The one category that must not wait for a convenient moment.
+  [[ "$output" == *"immediately"* ]]
+}
+
 @test "the briefing points at the target's own documentation" {
   # Only the workspace AGENTS.md/CLAUDE.md load automatically, because the session
   # starts at the workspace root. A component's own docs are the project-specific
