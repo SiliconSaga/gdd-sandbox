@@ -98,12 +98,28 @@ RUN set -eux; \
 
 # ---------------------------------------------------------------------------
 # 8. GDD core seed: bake the agnostic workspace so first run is fast and the
-#    image is a known-good baseline. A runtime `ws pull` freshens it.
+#    image is a known-good baseline.
 #    NO realm, NO target component, NO credentials — those arrive at run time.
+#
+#    THE IMAGE IS THE ONLY WAY THIS EVER UPDATES. A runtime `ws pull` does not
+#    freshen it — that command walks components, realms and hoards, not the
+#    workspace repository itself — and even if it did, provisioning has by then
+#    modified `templates/change.md`, and `ws pull` skips a dirty tree. The clone
+#    is also shallow. Found the hard way: a sandbox ran for weeks on a seed
+#    pinned to whatever the layer cache happened to hold, missing every hook fix
+#    shipped since, while the Dockerfile claimed otherwise.
+#
+#    SEED_REF is the upstream commit, resolved by bin/build.sh. Naming it in the
+#    layer is what makes Docker's cache correct rather than merely fast: the
+#    clone re-runs exactly when upstream has moved, and the sha that was baked is
+#    recorded in the image instead of being whatever the cache was holding.
 # ---------------------------------------------------------------------------
+ARG SEED_REF=main
 RUN set -eux; \
+    echo "seeding GDD core at ${SEED_REF}"; \
     git clone --depth 1 https://github.com/SiliconSaga/yggdrasil /opt/gdd-seed; \
-    test -x /opt/gdd-seed/scripts/ws
+    test -x /opt/gdd-seed/scripts/ws; \
+    git -C /opt/gdd-seed rev-parse HEAD > /opt/gdd-seed-ref
 
 # ---------------------------------------------------------------------------
 # 9. Dependency cache warming. Fetch the deps a likely target framework needs,

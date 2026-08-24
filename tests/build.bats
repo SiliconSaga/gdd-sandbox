@@ -5,7 +5,8 @@ setup() { stub_setup; make_stub ws 'exit 0'; }
 @test "build.sh calls ws docker build with the default tag" {
   bash bin/build.sh
   run cat "$STUB_LOG"
-  [[ "$output" == *"ws docker build -t gdd-sandbox:latest"* ]]
+  [[ "$output" == *"ws docker build"* ]]
+  [[ "$output" == *"-t gdd-sandbox:latest"* ]]
 }
 
 @test "build.sh converts the host context path for the native docker client" {
@@ -21,4 +22,27 @@ setup() { stub_setup; make_stub ws 'exit 0'; }
   bash bin/build.sh --tag gdd-sandbox:proto
   run cat "$STUB_LOG"
   [[ "$output" == *"-t gdd-sandbox:proto"* ]]
+}
+
+@test "build.sh names the upstream commit so the seed layer cannot cache forever" {
+  # The clone command never changes, so Docker reuses whatever it baked first.
+  # Measured: a sandbox running a seed pinned at yggdrasil PR #150, missing every
+  # hook fix shipped in the three releases since, while the image looked current.
+  # Passing the resolved sha makes the cache correct — hit while upstream is
+  # unchanged, miss the moment it moves.
+  make_stub git 'echo "abc123def456	refs/heads/main"'
+  bash bin/build.sh
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--build-arg SEED_REF=abc123def456"* ]]
+}
+
+@test "build.sh still builds when upstream cannot be reached, and says why" {
+  # An offline rebuild must still produce an image. What it must not do is imply
+  # the seed is current when it could not check.
+  make_stub git 'exit 1'
+  run bash bin/build.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"may be a stale cache hit"* ]]
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--build-arg SEED_REF=main"* ]]
 }
