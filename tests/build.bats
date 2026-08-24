@@ -36,6 +36,18 @@ setup() { stub_setup; make_stub ws 'exit 0'; }
   [[ "$output" == *"--build-arg SEED_REF=abc123def456"* ]]
 }
 
+@test "build.sh pins an explicitly requested seed ref without asking upstream" {
+  # Reproducing someone else's image, or bisecting which core release broke a
+  # sandbox, both need a specific commit rather than whatever main is now. The
+  # resolve step must not overwrite it — and must not even run, so the pin works
+  # offline.
+  make_stub git 'echo "SHOULD_NOT_RESOLVE	refs/heads/main"'
+  bash bin/build.sh --seed-ref deadbeefcafe
+  run cat "$STUB_LOG"
+  [[ "$output" == *"--build-arg SEED_REF=deadbeefcafe"* ]]
+  [[ "$output" != *"SHOULD_NOT_RESOLVE"* ]]
+}
+
 @test "build.sh still builds when upstream cannot be reached, and says why" {
   # An offline rebuild must still produce an image. What it must not do is imply
   # the seed is current when it could not check.

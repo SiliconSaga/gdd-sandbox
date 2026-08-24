@@ -110,14 +110,28 @@ RUN set -eux; \
 #    shipped since, while the Dockerfile claimed otherwise.
 #
 #    SEED_REF is the upstream commit, resolved by bin/build.sh. Naming it in the
-#    layer is what makes Docker's cache correct rather than merely fast: the
-#    clone re-runs exactly when upstream has moved, and the sha that was baked is
-#    recorded in the image instead of being whatever the cache was holding.
+#    layer is what makes Docker's cache correct rather than merely fast: the seed
+#    re-fetches exactly when upstream has moved, and the sha that was baked is
+#    recorded at /opt/gdd-seed-ref.
+#
+#    FETCHED AT THAT REF, not merely labelled with it. `git clone --depth 1 <url>`
+#    takes whatever the remote's default branch points at and ignores the build
+#    arg completely — which busts the cache correctly but pins nothing, so asking
+#    for an older sha to reproduce a past image would silently hand back current
+#    main. Fetching the ref explicitly is what makes the recorded sha a fact about
+#    the image rather than a coincidence.
+#
+#    Checked out as a branch rather than left detached: the workspace is copied
+#    from this tree, and an agent running `git status` in a detached HEAD is being
+#    handed a puzzle for no reason.
 # ---------------------------------------------------------------------------
 ARG SEED_REF=main
 RUN set -eux; \
     echo "seeding GDD core at ${SEED_REF}"; \
-    git clone --depth 1 https://github.com/SiliconSaga/yggdrasil /opt/gdd-seed; \
+    git init -q /opt/gdd-seed; \
+    git -C /opt/gdd-seed remote add origin https://github.com/SiliconSaga/yggdrasil; \
+    git -C /opt/gdd-seed fetch -q --depth 1 origin "${SEED_REF}"; \
+    git -C /opt/gdd-seed checkout -q -B main FETCH_HEAD; \
     test -x /opt/gdd-seed/scripts/ws; \
     git -C /opt/gdd-seed rev-parse HEAD > /opt/gdd-seed-ref
 
