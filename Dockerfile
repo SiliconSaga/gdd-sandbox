@@ -25,14 +25,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #    - procps                            : pgrep/pkill for the supervisor + healthcheck
 #    - util-linux                        : `script` (the PTY wrapper channels needs)
 #    - ruby-full + build-essential + zlib/ffi headers : compile native gems
+#    - imagemagick + file                : inspect and resize a supplied photo
+#
+#    On the image tools: someone handing a site a photo from their phone sends
+#    several megabytes at print resolution, and the agent had no way to see that,
+#    let alone fix it — a live session reported the size and could do nothing.
+#    `identify` and `file` read; `convert` writes a new file. Installing them is
+#    not the same as permitting them: `ws exec *` is on the workspace hook's
+#    ask-list, so a headless session still refuses these until the hook allows
+#    them by name. Read-only use is allowed upstream; `convert` deliberately is
+#    not, because it writes wherever it is pointed — that belongs behind a
+#    `ws image` verb which can validate the destination.
 # ---------------------------------------------------------------------------
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         git bash curl wget ca-certificates gnupg jq unzip procps util-linux \
         ruby-full build-essential \
-        zlib1g-dev libffi-dev libyaml-dev; \
-    rm -rf /var/lib/apt/lists/*
+        zlib1g-dev libffi-dev libyaml-dev \
+        imagemagick file; \
+    rm -rf /var/lib/apt/lists/*; \
+    identify -version; \
+    file --version
 
 # ---------------------------------------------------------------------------
 # 2. yq — mikefarah/yq (Go single binary). NOTE: Debian's apt "yq" is a
