@@ -147,7 +147,11 @@ setup() {
   export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
   bash provision/provision.sh
   run cat "$GDD_BRIEFING_PATH"
-  [[ "$output" == *"identify"* ]]
+  # Both spelled through `ws exec`, and asserted that way: a bare `file <path>`
+  # is not pre-approved, so an instruction to run one ends in a denial — the
+  # failure this briefing exists to prevent, and one this file has now made twice.
+  [[ "$output" == *"ws exec ken-site identify <path>"* ]]
+  [[ "$output" == *"ws exec ken-site file <path>"* ]]
   [[ "$output" == *"You cannot resize it here yet"* ]]
 }
 

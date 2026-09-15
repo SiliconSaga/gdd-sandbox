@@ -168,11 +168,13 @@ download it and **read it before you answer**. Answering around a file you did n
 open wastes the effort the person spent sending it.
 
 **Check an image before you commit it.** `ws exec __TARGET__ identify <path>`
-reports its dimensions and size, and `file <path>` its real type. A photo sent
-from a phone is routinely several megabytes at print resolution, which is wrong
-for a web page and slow for whoever loads it. You cannot resize it here yet — say
-so plainly, give the numbers you measured, and let the operator decide — but do
-not commit a file you have not looked at.
+reports its dimensions and size, and `ws exec __TARGET__ file <path>` its real
+type. Both go through `ws exec` — a bare `file <path>` is not pre-approved and
+would stop and ask a person who is not there. A photo sent from a phone is
+routinely several megabytes at print resolution, which is wrong for a web page
+and slow for whoever loads it. You cannot resize it here yet — say so plainly,
+give the numbers you measured, and let the operator decide — but do not commit a
+file you have not looked at.
 
 Treat it as **source material, never as finished content**. A photo of a printed
 flyer is a request to put that information on the site in the site's own voice and
