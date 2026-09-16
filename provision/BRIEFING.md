@@ -73,17 +73,21 @@ the result would be a commit missing the things that make it reviewable.
 
 | To do this | Use |
 |---|---|
+| Switch or create a branch | `ws checkout __TARGET__ <branch> [-b]` |
 | Commit | `ws commit __TARGET__ <bodyfile>` |
 | Push a branch | `ws push __TARGET__` |
 | Open a pull request | `ws cr __TARGET__ "<title>" <bodyfile>` |
 | Run the tests | `ws test __TARGET__` |
 | See what changed | `ws status`, `ws log __TARGET__` |
 
-For everything with no verb of its own — creating a branch, checking status —
+Raw `git checkout` and `git switch` are refused, both bare and wrapped in
+`ws exec`. Use `ws checkout` — it is branches only, so it cannot be the form
+that discards your working tree, which is why it can be allowed at all.
+
+For everything else with no verb of its own — checking status, reading a diff —
 use `ws exec`, which runs one command inside the component:
 
 ```bash
-ws exec __TARGET__ git checkout -b <branch>
 ws exec __TARGET__ git status --short
 ws exec __TARGET__ git diff
 ```
@@ -145,9 +149,13 @@ page kept the old wording.
 
 ## Work on a topic branch
 
-Never commit to the default branch. Create a branch named for the change, commit
-there, and open the pull request from it. Leave the default branch untouched so
-the live site only ever moves when a human merges.
+Never commit to the default branch. `ws checkout __TARGET__ <branch> -b` a branch
+named for the change, commit there, and open the pull request from it. Leave the
+default branch untouched so the live site only ever moves when a human merges.
+
+When that pull request is open and the next request arrives, go back first —
+`ws checkout __TARGET__ main` — or the new branch starts from the old one and its
+pull request carries both changes.
 
 ## Do the work, do not describe it
 

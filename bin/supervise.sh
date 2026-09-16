@@ -52,7 +52,13 @@ ROTATE_FLAG="${ROTATE_FLAG:-/tmp/gdd-rotate}"
 # happen in CI on the pull request, which is where the preview and the before/
 # after screenshots come from. Restore this only alongside a `ws build` that
 # resolves the effective destination and refuses one outside the component.
-ALLOWED_BASE="mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git checkout*),Bash(git switch*)"
+# Branching goes through `ws checkout`, not raw git. The workspace hook redirect-
+# denies `git checkout*` and `git switch*` in Tier 2, before anything here is
+# consulted, so listing them pre-allowed only advertised a capability the agent
+# would be refused — the same defect as sending it at a build it cannot run.
+# `ws checkout` is branches only by construction (it cannot express the path
+# forms that discard a working tree), which is why it can be granted whole.
+ALLOWED_BASE="mcp__plugin:discord:discord__reply,mcp__plugin:discord:discord__react,mcp__plugin:discord:discord__download_attachment,Read,Glob,Grep,Edit,Write,Bash(ws orient),Bash(ws status),Bash(ws log *),Bash(ws test *),Bash(ws checkout *),Bash(ws commit *),Bash(ws push *),Bash(ws cr *),Bash(git status*),Bash(git diff*),Bash(git log*)"
 [ -n "${GDD_TARGET:-}" ] && ALLOWED_BASE="$ALLOWED_BASE,Bash(ws exec $GDD_TARGET *)"
 ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-$ALLOWED_BASE}"
 # Hard denials: destructive, out-of-scope, or irreversible — no card, no override.
@@ -62,12 +68,12 @@ ALLOWED_TOOLS="${GDD_ALLOWED_TOOLS:-$ALLOWED_BASE}"
 # merge` would otherwise be reachable, and "never merges" has to be enforced, not
 # implied. Publishing stays a human act on the PR page.
 #
-# The git entries that discard work need naming too. `Bash(git checkout*)` is
-# allowed so the agent can move between branches, and that same pattern covers
-# `git checkout -- <path>`, which silently throws away the edits someone just
-# asked for. Deny beats allow, so the destructive forms are listed explicitly —
-# including the source-qualified spelling (`git checkout HEAD -- path`), which
-# discards identically while naming a source first.
+# The git entries that discard work stay named even though raw `git checkout` is
+# no longer pre-allowed above. They are defense in depth for a spelling the
+# workspace hook does not see — an operator-supplied `GDD_ALLOWED_TOOLS` can
+# widen the allow list, and deny beats allow. That includes the
+# source-qualified spelling (`git checkout HEAD -- path`), which discards
+# identically while naming a source first.
 #
 # Treat this list as a speed bump, not a boundary. It matches command strings, so
 # an equivalent spelled another way (`git -C . checkout -- x`) slips past. What
