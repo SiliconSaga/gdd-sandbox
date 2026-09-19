@@ -150,8 +150,11 @@ setup() {
   # Both spelled through `ws exec`, and asserted that way: a bare `file <path>`
   # is not pre-approved, so an instruction to run one ends in a denial — the
   # failure this briefing exists to prevent, and one this file has now made twice.
+  # `file` needs `--` too: the workspace allows only that form, since `file -C`
+  # compiles a magic file and writes it. Without `--` it is refused as well.
   [[ "$output" == *"ws exec ken-site identify <path>"* ]]
-  [[ "$output" == *"ws exec ken-site file <path>"* ]]
+  [[ "$output" == *"ws exec ken-site file -- <path>"* ]]
+  [[ "$output" != *"ws exec ken-site file <path>"* ]]
   [[ "$output" == *"You cannot resize it here yet"* ]]
 }
 

@@ -30,12 +30,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #    On the image tools: someone handing a site a photo from their phone sends
 #    several megabytes at print resolution, and the agent had no way to see that,
 #    let alone fix it — a live session reported the size and could do nothing.
-#    `identify` and `file` read; `convert` writes a new file. Installing them is
-#    not the same as permitting them: `ws exec *` is on the workspace hook's
+#    `identify` and `file` inspect; `convert` writes a new file. Installing them
+#    is not the same as permitting them: `ws exec *` is on the workspace hook's
 #    ask-list, so a headless session still refuses these until the hook allows
-#    them by name. Read-only use is allowed upstream; `convert` deliberately is
-#    not, because it writes wherever it is pointed — that belongs behind a
-#    `ws image` verb which can validate the destination.
+#    them by name. Upstream allows `identify` and `file -- <path>` only — the
+#    `--` because `file -C` compiles a magic file and writes it. `convert`
+#    deliberately is not allowed, because it writes wherever it is pointed —
+#    that belongs behind a `ws image` verb which can validate the destination.
 # ---------------------------------------------------------------------------
 RUN set -eux; \
     apt-get update; \
