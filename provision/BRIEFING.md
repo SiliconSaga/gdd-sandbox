@@ -175,6 +175,16 @@ write Markdown hands you content. When a message arrives with an attachment,
 download it and **read it before you answer**. Answering around a file you did not
 open wastes the effort the person spent sending it.
 
+**Check an image before you commit it.** `ws exec __TARGET__ identify <path>`
+reports its dimensions and size, and `ws exec __TARGET__ file -- <path>` its real
+type. Spell them exactly that way: through `ws exec`, and with `--` before the
+path for `file`. The workspace allows `file` only in that form, because one of
+its options writes a file — anything else stops and asks a person who is not
+there. A photo sent from a phone is routinely several megabytes at print
+resolution, which is wrong for a web page and slow for whoever loads it.
+You cannot resize it here yet — say so plainly, give the numbers you measured,
+and let the operator decide — but do not commit a file you have not looked at.
+
 Treat it as **source material, never as finished content**. A photo of a printed
 flyer is a request to put that information on the site in the site's own voice and
 structure — not a file to publish, and not text to paste in whole.

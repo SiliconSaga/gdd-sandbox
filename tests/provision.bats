@@ -139,6 +139,25 @@ setup() {
   [[ "$output" == *"preparing the pull request"* ]]
 }
 
+@test "the briefing says to measure an image before committing it" {
+  # A live session received a multi-megabyte phone photo, had no way to inspect
+  # it, and could only remark on the size. The tools now ship in the image, so
+  # the briefing has to say they exist — and has to be honest that resizing is
+  # not available yet, or the agent promises something it cannot do.
+  export GDD_BRIEFING_PATH="$BATS_TEST_TMPDIR/briefing.md"
+  bash provision/provision.sh
+  run cat "$GDD_BRIEFING_PATH"
+  # Both spelled through `ws exec`, and asserted that way: a bare `file <path>`
+  # is not pre-approved, so an instruction to run one ends in a denial — the
+  # failure this briefing exists to prevent, and one this file has now made twice.
+  # `file` needs `--` too: the workspace allows only that form, since `file -C`
+  # compiles a magic file and writes it. Without `--` it is refused as well.
+  [[ "$output" == *"ws exec ken-site identify <path>"* ]]
+  [[ "$output" == *"ws exec ken-site file -- <path>"* ]]
+  [[ "$output" != *"ws exec ken-site file <path>"* ]]
+  [[ "$output" == *"You cannot resize it here yet"* ]]
+}
+
 @test "the briefing says what to do with a file dropped in chat" {
   # Having the tool is not the same as knowing what a file is for. A photo of a
   # newspaper clipping is source material to read and act on, never something to
