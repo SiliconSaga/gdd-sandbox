@@ -196,6 +196,16 @@ setup() {
   # ...and says where the build actually happens, so the gap is answered rather
   # than merely left out.
   [[ "$output" == *"CI builds every pull request"* ]]
+  # Same shape, second instance: the briefing taught `ws exec <target> git
+  # checkout -b <branch>`, which the workspace hook redirect-denies now that
+  # `ws checkout` exists. Measured against the real hook, not assumed. Asserted
+  # on the runnable form rather than the string, because the briefing also names
+  # raw checkout in prose — to say it is refused, which is the opposite of an
+  # instruction that ends in a denial.
+  [[ "$output" != *"ws exec ken-site git checkout"* ]]
+  [[ "$output" != *"ws exec ken-site git switch"* ]]
+  [[ "$output" == *"ws checkout ken-site <branch>"* ]]
+  [[ "$output" == *"ws checkout ken-site main"* ]]
 }
 
 @test "the briefing tells the agent to write the Thalamus, not just read it" {

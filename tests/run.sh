@@ -22,7 +22,25 @@ shellcheck_run() {
 }
 
 case "${1:-test}" in
-  test) exec bash "$BATS" tests/ ;;
+  test)
+    # Optional selector, supplied by `ws test gdd-sandbox <selector>` through the
+    # realm adapter's commands.testFilter. A path under tests/ runs that file; any
+    # other value is a bats --filter regex over test names.
+    sel="${2:-}"
+    if [ -z "$sel" ]; then
+      exec bash "$BATS" tests/
+    elif [ -f "$sel" ]; then
+      exec bash "$BATS" "$sel"
+    fi
+    # A regex matching nothing makes bats print 1..0 and exit 0 — a green run of
+    # no tests, indistinguishable at a glance from the one test asked for having
+    # passed. Refuse it instead; that is the whole point of declaring a filter.
+    if [ "$(bash "$BATS" --count --filter "$sel" tests/)" -eq 0 ]; then
+      echo "no test name matches '$sel' (a bats --filter regex over tests/)" >&2
+      exit 1
+    fi
+    exec bash "$BATS" --filter "$sel" tests/
+    ;;
   lint) shellcheck_run bin/*.sh tests/*.sh provision/*.sh ;;
-  *) echo "usage: tests/run.sh {test|lint}" >&2; exit 2 ;;
+  *) echo "usage: tests/run.sh {test [selector]|lint}" >&2; exit 2 ;;
 esac

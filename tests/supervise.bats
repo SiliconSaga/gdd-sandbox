@@ -130,10 +130,11 @@ EOF
 }
 
 @test "launch denies the git commands that throw work away" {
-  # `Bash(git checkout*)` is allowed so the agent can switch branches, and that
-  # same pattern would otherwise cover `git checkout -- <path>`, which silently
-  # discards the edits someone just asked for. Deny beats allow, so naming the
-  # destructive forms explicitly is what stops them.
+  # Raw `git checkout` is no longer pre-allowed, so these denials are defense in
+  # depth rather than the thing holding the line: an operator-supplied
+  # GDD_ALLOWED_TOOLS can widen the allow list, and deny beats allow. Naming the
+  # destructive forms explicitly is what keeps `git checkout -- <path>` — which
+  # silently discards the edits someone just asked for — out of reach either way.
   bash bin/supervise.sh
   run cat "$STUB_LOG"
   deny="${output#*--disallowedTools}"
@@ -144,9 +145,14 @@ EOF
   [[ "$deny" == *"git restore"* ]]
   [[ "$deny" == *"git branch -d"* ]]
   [[ "$deny" == *"git branch -D"* ]]
-  # ...without losing the ability to move between branches.
+  # ...without losing the ability to move between branches — through the verb
+  # now, not raw git. The workspace hook redirect-denies `git checkout`/`git
+  # switch` before this list is consulted, so pre-allowing them advertised a
+  # capability the agent would be refused.
   allow="${output%%--disallowedTools*}"
-  [[ "$allow" == *"git checkout*"* ]]
+  [[ "$allow" == *"ws checkout *"* ]]
+  [[ "$allow" != *"Bash(git checkout*)"* ]]
+  [[ "$allow" != *"git switch"* ]]
 }
 
 @test "an operator's extra deny rules add to the baseline, never replace it" {

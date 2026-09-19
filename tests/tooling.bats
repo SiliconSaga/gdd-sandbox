@@ -41,3 +41,13 @@ load helpers/stub
   [ "$status" -ne 0 ]
   [[ "$output" == *"no session log"* ]]
 }
+
+@test "a test selector that matches nothing fails rather than passing empty" {
+  # bats prints 1..0 and exits 0 for a --filter matching no test name — a green
+  # run of nothing, which reads exactly like the one test asked for passing.
+  # `ws test gdd-sandbox <selector>` reaches this runner through the realm
+  # adapter's testFilter, so a typo there must be loud.
+  run bash tests/run.sh test "no-test-is-named-this-xyz"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no test name matches"* ]]
+}
